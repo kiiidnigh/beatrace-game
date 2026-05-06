@@ -1,0 +1,19 @@
+# Python Verzeichnisse
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# IDE Verzeichnisse
+.idea/
+.vscode/
+
+# Lokale Daten (falls noch Reste im Ordner sind)
+logs/
+output/
+data/
+*.log
+
+codebase.txt
