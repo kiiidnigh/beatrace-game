@@ -17,3 +17,8 @@ data/
 *.log
 
 codebase.txt
+# Build und Release Ordner
+build/
+dist/
+installer/
+*.spec
