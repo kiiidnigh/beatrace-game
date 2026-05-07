@@ -12,6 +12,7 @@ class NetworkManager:
         self.room_code = ""
         self.is_connected = False
         self.client_id = str(uuid.uuid4())
+        self.topic = ""
 
         self.client = mqtt.Client()
         self.client.on_connect = self._on_connect
@@ -43,7 +44,7 @@ class NetworkManager:
             sender_id = payload.get("client_id")
             command = payload.get("command")
 
-            # Eigene Nachrichten ignorieren wir
+            # Eigene Nachrichten ignorieren wir anhand der eindeutigen UUID
             if sender_id != self.client_id:
                 logging.debug(f"[Network] Nachricht empfangen: {command} von {payload.get('sender')}")
                 EventBus.emit(f"NET_{command}", data=payload)
@@ -64,6 +65,9 @@ class NetworkManager:
 
     def disconnect(self):
         if self.is_connected:
+            logging.info(f"[Network] Trenne Verbindung von Topic: {self.topic}")
+            # FIX: Zwingend vom Topic abmelden, um Geister-Nachrichten bei Neuverbindung zu stoppen!
+            self.client.unsubscribe(self.topic)
             self.client.loop_stop()
             self.client.disconnect()
             self.is_connected = False

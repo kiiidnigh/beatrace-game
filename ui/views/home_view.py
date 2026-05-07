@@ -13,15 +13,8 @@ class HomeView(ctk.CTkFrame):
         prefs = load_prefs()
         self.game_state.my_name = prefs.get("last_username", "")
 
-        # Reset der restlichen Match-Daten
-        self.game_state.players = []
-        self.game_state.active_players = []
-        self.game_state.ready_players = set()
-        self.game_state.eliminated_players = set()
-        self.game_state.times = {}
-        self.game_state.bonus_texts = {}
-        self.game_state.active_player = None
-        self.game_state.room_code = ""
+        # FIX: Sicheres Zurücksetzen aller Match-Daten über den Manager
+        self.game_state.reset_match_data()
 
         self.setup_ui()
 

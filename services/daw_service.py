@@ -12,21 +12,28 @@ class DAWService:
         self.watcher = FLWatcher()
         self.current_daw_path = settings.FL_STUDIO_PATH
         logging.info("[DAWService] Bereit. Wartet auf Befehle.")
+
+        self._listeners = {
+            "CMD_LAUNCH_DAW": self._handle_launch,
+            "CMD_WAIT_DAW_INTERACTION": lambda d: self.watcher.wait_for_interaction(
+                callback=lambda: EventBus.emit("DAW_INTERACTION_DETECTED")),
+            "CMD_WAIT_RESUME_CLICK": lambda d: self.watcher.wait_for_interaction(
+                callback=lambda: EventBus.emit("DAW_RESUME_CLICK_DETECTED")),
+            "CMD_WAIT_DAW_EXIT": lambda d: self.watcher.wait_for_exit(
+                callback=lambda: EventBus.emit("DAW_PROCESS_CLOSED")),
+            "CMD_FORCE_AUTO_SAVE": lambda d: self.watcher.auto_save_and_close(),
+            "CMD_STOP_DAW_MONITOR": lambda d: self.watcher.stop()
+        }
         self._setup_subscriptions()
 
     def _setup_subscriptions(self):
-        EventBus.subscribe("CMD_LAUNCH_DAW", self._handle_launch)
-        EventBus.subscribe("CMD_WAIT_DAW_INTERACTION", lambda d: self.watcher.wait_for_interaction(
-            callback=lambda: EventBus.emit("DAW_INTERACTION_DETECTED")))
+        for event, func in self._listeners.items():
+            EventBus.subscribe(event, func)
 
-        # Warte auf einen Klick, um das Spiel nach der Pause fortzusetzen
-        EventBus.subscribe("CMD_WAIT_RESUME_CLICK", lambda d: self.watcher.wait_for_interaction(
-            callback=lambda: EventBus.emit("DAW_RESUME_CLICK_DETECTED")))
-
-        EventBus.subscribe("CMD_WAIT_DAW_EXIT",
-                           lambda d: self.watcher.wait_for_exit(callback=lambda: EventBus.emit("DAW_PROCESS_CLOSED")))
-        EventBus.subscribe("CMD_FORCE_AUTO_SAVE", lambda d: self.watcher.auto_save_and_close())
-        EventBus.subscribe("CMD_STOP_DAW_MONITOR", lambda d: self.watcher.stop())
+    def cleanup(self):
+        for event, func in self._listeners.items():
+            EventBus.unsubscribe(event, func)
+        self.watcher.stop()
 
     def _handle_launch(self, data):
         project_path = data.get("project_path")

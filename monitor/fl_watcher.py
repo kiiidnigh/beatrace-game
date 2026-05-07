@@ -7,13 +7,13 @@ from utils.process import is_fl_running, force_save_and_close_fl, FL_PROCESS_NAM
 
 class FLWatcher:
     def __init__(self):
-        # FIX: Unabhängige Schalter für Multitasking!
         self._monitoring_start = False
         self._monitoring_interaction = False
         self._monitoring_exit = False
+        # FIX: Referenz auf den Listener speichern, um Memory Leaks zu verhindern
+        self._mouse_listener = None
 
     def wait_for_start(self, callback):
-        self._monitoring_start = False
         self._monitoring_start = True
 
         def loop():
@@ -27,7 +27,6 @@ class FLWatcher:
         threading.Thread(target=loop, daemon=True).start()
 
     def wait_for_interaction(self, callback):
-        self._monitoring_interaction = False
         self._monitoring_interaction = True
 
         def loop():
@@ -35,18 +34,24 @@ class FLWatcher:
                 if pressed and self._monitoring_interaction:
                     self._monitoring_interaction = False
                     if callback: callback()
-                    return False
+                    return False  # Beendet den Listener intern sofort
 
-            with mouse.Listener(on_click=on_click) as listener:
-                while self._monitoring_interaction and listener.running:
-                    time.sleep(0.1)
-                if not self._monitoring_interaction and listener.running:
-                    listener.stop()
+            self._mouse_listener = mouse.Listener(on_click=on_click)
+            self._mouse_listener.start()
+
+            # Warten, bis Überwachung abgebrochen wird oder Listener stirbt
+            while self._monitoring_interaction and self._mouse_listener.is_alive():
+                time.sleep(0.1)
+
+            # Fail-Safe: Wenn die Überwachung von außen abgebrochen wird, Listener killen
+            if self._mouse_listener and self._mouse_listener.is_alive():
+                self._mouse_listener.stop()
+
+            self._mouse_listener = None
 
         threading.Thread(target=loop, daemon=True).start()
 
     def wait_for_exit(self, callback):
-        self._monitoring_exit = False
         self._monitoring_exit = True
 
         def loop():
@@ -58,12 +63,12 @@ class FLWatcher:
                         if p.info['name'] and p.info['name'].lower() == FL_PROCESS_NAME:
                             target_proc = p
                             break
-                    except:
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
+
                 if not target_proc:
                     time.sleep(0.5)
 
-            # Wenn der Prozess gefunden wurde, warte bis er stirbt
             if target_proc:
                 while self._monitoring_exit and target_proc.is_running():
                     time.sleep(0.2)
@@ -79,17 +84,20 @@ class FLWatcher:
 
         def run():
             force_save_and_close_fl()
-
             # Fail-Safe Überprüfung nach 5 Sekunden
             time.sleep(5)
             if is_fl_running():
                 import logging
-                logging.warning("Auto-Save konnte FL Studio nicht beenden!")
+                logging.warning("[FLWatcher] Auto-Save konnte FL Studio nicht beenden!")
 
         threading.Thread(target=run, daemon=True).start()
 
     def stop(self):
-        """Stoppt alle Überwachungen sofort (z.B. beim Verlassen des Spiels)."""
+        """Stoppt alle Überwachungen sofort."""
         self._monitoring_start = False
         self._monitoring_interaction = False
         self._monitoring_exit = False
+
+        if self._mouse_listener and self._mouse_listener.is_alive():
+            self._mouse_listener.stop()
+            self._mouse_listener = None

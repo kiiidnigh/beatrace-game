@@ -1,6 +1,7 @@
+import os
 import time
 import threading
-from utils.file_utils import calculate_md5  # Wir importieren unser neues Werkzeug!
+from utils.file_utils import calculate_md5
 
 
 class FileWatcher:
@@ -13,6 +14,8 @@ class FileWatcher:
 
         def loop():
             wait_start = time.time()
+            last_mtime = -1
+            last_size = -1
 
             while self._is_monitoring:
                 if not expected_hash:
@@ -20,13 +23,25 @@ class FileWatcher:
                     if callback: callback(success=True)
                     return
 
-                # Wir rufen einfach unser externes Utility auf!
-                current_hash = calculate_md5(self.file_path)
+                if os.path.exists(self.file_path):
+                    try:
+                        current_mtime = os.path.getmtime(self.file_path)
+                        current_size = os.path.getsize(self.file_path)
 
-                if current_hash == expected_hash:
-                    self._is_monitoring = False
-                    if callback: callback(success=True)
-                    return
+                        # PERFORMANCE FIX: Berechne den schweren MD5 Hash nur,
+                        # wenn sich die Datei wirklich verändert hat!
+                        if current_mtime != last_mtime or current_size != last_size:
+                            current_hash = calculate_md5(self.file_path)
+
+                            if current_hash == expected_hash:
+                                self._is_monitoring = False
+                                if callback: callback(success=True)
+                                return
+
+                            last_mtime = current_mtime
+                            last_size = current_size
+                    except OSError:
+                        pass  # Datei wird vermutlich gerade heruntergeladen oder ist blockiert
 
                 if (time.time() - wait_start) > 60:
                     self._is_monitoring = False

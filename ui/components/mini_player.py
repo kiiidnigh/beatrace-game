@@ -46,10 +46,10 @@ class MiniPlayer(ctk.CTkToplevel):
                                        anchor="w")
         self.lbl_player.pack(fill="x")
 
-        self.lbl_time = ctk.CTkLabel(text_frame, text="Warte auf Klick..", font=("Helvetica", 16, "bold"), anchor="w")
+        self.lbl_time = ctk.CTkLabel(text_frame, text="Warte auf Klick...", font=("Helvetica", 16, "bold"), anchor="w")
         self.lbl_time.pack(fill="x")
 
-        # HIER DER FIX: Anstatt eine Methode der View aufzurufen, emitten wir ein Event!
+        # Der Button sendet weiterhin den Befehl, wird aber visuell strikt als Pause-Button genutzt
         self.btn_pause = ctk.CTkButton(self, text="||", width=40, height=40, state="disabled",
                                        command=lambda: EventBus.emit("CMD_TOGGLE_PAUSE"))
         self.btn_pause.pack(side="right", padx=10)
@@ -88,13 +88,14 @@ class MiniPlayer(ctk.CTkToplevel):
 
     def update_display(self, time_str, is_paused):
         self.lbl_time.configure(text=time_str, font=("Helvetica", 20, "bold"))
-        self.btn_pause.configure(state="normal")
 
         if is_paused:
             self.lbl_time.configure(text_color="#e67e22")
-            self.lbl_player.configure(text="PAUSIERT")
-            self.btn_pause.configure(text=">>", fg_color="#e67e22", hover_color="#d35400")
+            self.lbl_player.configure(text="PAUSIERT. Warte auf Klick...")
+            # Button wird lediglich deaktiviert, da das Fortsetzen nur über DAW-Klick geschieht
+            self.btn_pause.configure(state="disabled", text="||", fg_color=["#3a7ebf", "#1f538d"])
         else:
             self.lbl_time.configure(text_color="white")
             self.lbl_player.configure(text="Dein Zug")
-            self.btn_pause.configure(text="||", fg_color=["#3a7ebf", "#1f538d"])
+            # Button ist bereit, um das Spiel zu pausieren
+            self.btn_pause.configure(state="normal", text="||", fg_color=["#3a7ebf", "#1f538d"])

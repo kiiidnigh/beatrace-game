@@ -14,8 +14,10 @@ def is_fl_running():
         try:
             if proc.info['name'] and proc.info['name'].lower() == FL_PROCESS_NAME:
                 return True
-        except:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
+        except Exception as e:
+            logging.debug(f"[ProcessUtil] Fehler bei Prozess-Scan: {e}")
     return False
 
 def kill_all_fl_instances():
@@ -26,8 +28,10 @@ def kill_all_fl_instances():
             if proc.info['name'] and proc.info['name'].lower() == FL_PROCESS_NAME:
                 proc.kill()
                 killed_any = True
-        except:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
+        except Exception as e:
+            logging.debug(f"[ProcessUtil] Konnte Prozess nicht killen: {e}")
     return killed_any
 
 def force_save_and_close_fl():
@@ -41,7 +45,7 @@ def force_save_and_close_fl():
         try:
             if proc.info['name'] and proc.info['name'].lower() == FL_PROCESS_NAME:
                 fl_pids.add(proc.info['pid'])
-        except:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
 
     if not fl_pids:

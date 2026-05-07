@@ -15,7 +15,25 @@ class TimelineService:
             self._ensure_file_exists()
             logging.info(f"[TimelineService] Gestartet. CSV liegt in: {self.filepath}")
 
+        self._listeners = {
+            "STATE_MATCH_STARTED": lambda d: self.log_event("MATCH_START", note=d.get("note", "")),
+            "STATE_TURN_START": lambda d: self.log_event("TURN_START", d.get("player"), d.get("time_left", 0), d.get("note", "")),
+            "STATE_PAUSED": lambda d: self.log_event("PAUSE", d.get("player"), d.get("time_left", 0), d.get("note", "")),
+            "STATE_RESUMED": lambda d: self.log_event("RESUME", d.get("player"), d.get("time_left", 0), d.get("note", "")),
+            "STATE_TURN_END": lambda d: self.log_event("TURN_END", d.get("player"), d.get("time_left", 0), d.get("note", "")),
+            "STATE_ELIMINATED": lambda d: self.log_event("ELIMINATED", d.get("player"), d.get("time_left", 0), d.get("note", "")),
+            "STATE_FINISHED": lambda d: self.log_event("FINISHED", d.get("player"), d.get("time_left", 0), d.get("note", "")),
+            "STATE_GAME_OVER": lambda d: self.log_event("GAME_OVER", note=d.get("note", ""))
+        }
         self._setup_subscriptions()
+
+    def _setup_subscriptions(self):
+        for event, func in self._listeners.items():
+            EventBus.subscribe(event, func)
+
+    def cleanup(self):
+        for event, func in self._listeners.items():
+            EventBus.unsubscribe(event, func)
 
     def _ensure_file_exists(self):
         try:
@@ -26,27 +44,6 @@ class TimelineService:
                     writer.writerow(["Real_Timestamp", "Event_Type", "Player", "Remaining_Time", "Notiz"])
         except Exception as e:
             logging.error(f"[TimelineService] Fehler beim Erstellen der CSV: {e}")
-
-    def _setup_subscriptions(self):
-        # Das ist die Magie! Der Service protokolliert vollautomatisch den Status der App.
-        EventBus.subscribe("STATE_MATCH_STARTED", lambda d: self.log_event("MATCH_START", note=d.get("note", "")))
-        EventBus.subscribe("STATE_TURN_START",
-                           lambda d: self.log_event("TURN_START", d.get("player"), d.get("time_left", 0),
-                                                    d.get("note", "")))
-        EventBus.subscribe("STATE_PAUSED",
-                           lambda d: self.log_event("PAUSE", d.get("player"), d.get("time_left", 0), d.get("note", "")))
-        EventBus.subscribe("STATE_RESUMED", lambda d: self.log_event("RESUME", d.get("player"), d.get("time_left", 0),
-                                                                     d.get("note", "")))
-        EventBus.subscribe("STATE_TURN_END",
-                           lambda d: self.log_event("TURN_END", d.get("player"), d.get("time_left", 0),
-                                                    d.get("note", "")))
-        EventBus.subscribe("STATE_ELIMINATED",
-                           lambda d: self.log_event("ELIMINATED", d.get("player"), d.get("time_left", 0),
-                                                    d.get("note", "")))
-        EventBus.subscribe("STATE_FINISHED",
-                           lambda d: self.log_event("FINISHED", d.get("player"), d.get("time_left", 0),
-                                                    d.get("note", "")))
-        EventBus.subscribe("STATE_GAME_OVER", lambda d: self.log_event("GAME_OVER", note=d.get("note", "")))
 
     def log_event(self, event_type, player="System", remaining_time=0.0, note=""):
         if not self.is_host:

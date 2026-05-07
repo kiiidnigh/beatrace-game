@@ -17,21 +17,28 @@ class UXService:
         self._notified_milestones = set()
 
         logging.info(f"[UXService] Gestartet im Modus: {self.ui_mode}")
+
+        self._listeners = {
+            "UX_START_TURN": lambda d: self.root_window.after(0, self.start_turn),
+            "UX_END_TURN": lambda d: self.root_window.after(0, self.end_turn),
+            "UX_SHOW_WARNING": lambda d: self.root_window.after(0, lambda: self.show_warning(d.get("text"))),
+            "STATE_TIMER_TICK": lambda d: self.root_window.after(0, lambda: self.update_during_turn(d.get("time_str"),
+                                                                                                    d.get("time_left"),
+                                                                                                    d.get(
+                                                                                                        "is_paused"))),
+            "STATE_PAUSED": lambda d: self.root_window.after(0, lambda: self._on_pause_event(True, d.get("player"))),
+            "STATE_RESUMED": lambda d: self.root_window.after(0, lambda: self._on_pause_event(False, d.get("player")))
+        }
         self._setup_subscriptions()
 
     def _setup_subscriptions(self):
-        # Verbindet UI-Events sicher mit dem Main Thread (Tkinter-Regel)
-        EventBus.subscribe("UX_START_TURN", lambda d: self.root_window.after(0, self.start_turn))
-        EventBus.subscribe("UX_END_TURN", lambda d: self.root_window.after(0, self.end_turn))
-        EventBus.subscribe("UX_SHOW_WARNING",
-                           lambda d: self.root_window.after(0, lambda: self.show_warning(d.get("text"))))
-        EventBus.subscribe("STATE_TIMER_TICK", lambda d: self.root_window.after(0, lambda: self.update_during_turn(
-            d.get("time_str"), d.get("time_left"), d.get("is_paused"))))
+        for event, func in self._listeners.items():
+            EventBus.subscribe(event, func)
 
-        EventBus.subscribe("STATE_PAUSED",
-                           lambda d: self.root_window.after(0, lambda: self._on_pause_event(True, d.get("player"))))
-        EventBus.subscribe("STATE_RESUMED",
-                           lambda d: self.root_window.after(0, lambda: self._on_pause_event(False, d.get("player"))))
+    def cleanup(self):
+        for event, func in self._listeners.items():
+            EventBus.unsubscribe(event, func)
+        self.root_window.after(0, self.end_turn)
 
     def _on_pause_event(self, is_paused, player_name):
         if self.ui_mode == "Stealth" and player_name == self.game_state_ref.my_name:
@@ -44,7 +51,6 @@ class UXService:
         self._notified_milestones.clear()
         if self.ui_mode == "Mini-Player":
             if not self.mini_player:
-                # HIER DER FIX: Wir instanziieren den MiniPlayer ohne GameView-Referenz!
                 self.mini_player = MiniPlayer(self.root_window)
         elif self.ui_mode == "Stealth":
             ToastNotification("DAW läuft! Klicke in die DAW, um zu starten.")

@@ -1,4 +1,3 @@
-import json
 import os
 
 
@@ -19,14 +18,27 @@ class GameState:
         self.match_folder_name = ""
         self.project_filename = "project.zip"
 
-        # FIX: Diese Variable muss immer existieren, damit der Client nicht abstürzt!
+        # Diese Variable muss immer existieren, damit der Client nicht abstürzt!
         self.selected_template_path = ""
 
-        self.times = {}
-        self.bonus_texts = {}
+        # Gekapselte Dictionaries für Zeiten und Texte
+        self._times = {}
+        self._bonus_texts = {}
+
         self.active_player = None
         self.ready_players = set()
         self.eliminated_players = set()
+
+    def reset_match_data(self):
+        """Setzt alle laufenden Spieldaten sicher zurück (z.B. beim Betreten des Hauptmenüs)."""
+        self.players.clear()
+        self.active_players.clear()
+        self.ready_players.clear()
+        self.eliminated_players.clear()
+        self._times.clear()
+        self._bonus_texts.clear()
+        self.active_player = None
+        self.room_code = ""
 
     @property
     def local_match_dir(self):
@@ -48,6 +60,26 @@ class GameState:
 
         return os.path.join(match_dir, self.project_filename)
 
+    def get_player_time(self, player_name, default=0):
+        """Gibt die Zeit eines Spielers sicher zurück."""
+        return self._times.get(player_name, default)
+
+    def set_player_time(self, player_name, time_seconds):
+        """Setzt die Zeit eines Spielers sicher."""
+        self._times[player_name] = time_seconds
+
+    def get_bonus_text(self, player_name):
+        """Gibt den Bonustext eines Spielers sicher zurück."""
+        return self._bonus_texts.get(player_name, "")
+
+    def set_bonus_text(self, player_name, text):
+        """Setzt den Bonustext eines Spielers sicher."""
+        self._bonus_texts[player_name] = text
+
+    def get_all_times_dict(self):
+        """Gibt eine Kopie der Zeiten für OBS oder UI zurück."""
+        return dict(self._times)
+
     def load_sync_data(self, data):
         self.players = data.get("players", [])
         self.active_players = list(self.players)
@@ -59,9 +91,9 @@ class GameState:
         self.project_filename = data.get("project_filename", "project.zip")
 
         for player in self.players:
-            if player not in self.times:
-                self.times[player] = self.start_time_minutes * 60
-                self.bonus_texts[player] = ""
+            if player not in self._times:
+                self.set_player_time(player, self.start_time_minutes * 60)
+                self.set_bonus_text(player, "")
 
     def export_sync_data(self):
         return {
@@ -74,8 +106,8 @@ class GameState:
         }
 
     def update_time(self, player_name, elapsed_seconds):
-        if player_name in self.times:
-            self.times[player_name] -= elapsed_seconds
+        if player_name in self._times:
+            self._times[player_name] -= elapsed_seconds
 
     def eliminate_player(self, player_name):
         if player_name in self.active_players:
@@ -87,8 +119,9 @@ class GameState:
             return
         bonus = remaining_time / len(self.active_players)
         for p in self.active_players:
-            self.times[p] += bonus
-            self.bonus_texts[p] = f" (+{int(bonus)}s)"
+            current_time = self.get_player_time(p)
+            self.set_player_time(p, current_time + bonus)
+            self.set_bonus_text(p, f" (+{int(bonus)}s)")
 
     def get_next_active_player(self, last_player):
         if not self.active_players:

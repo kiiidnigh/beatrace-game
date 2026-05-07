@@ -21,11 +21,9 @@ class HostView(ctk.CTkFrame):
         self.selected_base_folder = self.prefs.get("last_folder", "")
         self.selected_match_dir = ""
 
-        # NEU: Template-Map laden
         self.template_data = get_available_templates()
         self.available_names = sorted(list(self.template_data.keys()))
 
-        # Standardwert finden
         default_val = next((n for n in self.available_names if "default.flp" in n),
                            self.available_names[0] if self.available_names else "Keine Templates")
 
@@ -44,7 +42,6 @@ class HostView(ctk.CTkFrame):
         return f"Beatrace_Match_{max_num + 1}"
 
     def setup_ui(self, default_val):
-        # Header (Oben verankert)
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
         header_frame.pack(fill="x", padx=20, pady=(20, 0))
 
@@ -52,17 +49,14 @@ class HostView(ctk.CTkFrame):
                                  fg_color="#636E72", hover_color="#2D3436", command=self.go_back)
         btn_back.pack(side="left")
 
-        # Main Container (Zentriert den kompakten Formular-Block in der Mitte)
         main_container = ctk.CTkFrame(self, fg_color="transparent")
         main_container.pack(fill="both", expand=True)
 
-        # Kompakter Formular-Block
         form_frame = ctk.CTkFrame(main_container, fg_color="transparent")
         form_frame.pack(expand=True)
 
         ctk.CTkLabel(form_frame, text="Spiel konfigurieren", font=("Helvetica", 28, "bold")).pack(pady=(0, 20))
 
-        # --- TEMPLATE AUSWAHL ---
         frame_template = ctk.CTkFrame(form_frame)
         frame_template.pack(pady=5, padx=20, fill="x")
 
@@ -75,7 +69,7 @@ class HostView(ctk.CTkFrame):
         self.template_var = ctk.StringVar(value=default_val)
         self.template_menu = ctk.CTkOptionMenu(
             temp_select_frame,
-            values=self.available_names,  # FIX: Hier steht jetzt korrekt available_names!
+            values=self.available_names,
             variable=self.template_var,
             width=280,
             fg_color="#2D3436",
@@ -93,7 +87,6 @@ class HostView(ctk.CTkFrame):
         )
         btn_manage.pack(side="left", padx=5)
 
-        # --- ZEITEINSTELLUNGEN ---
         frame_time = ctk.CTkFrame(form_frame)
         frame_time.pack(pady=5, padx=20, fill="x")
         ctk.CTkLabel(frame_time, text="Startzeit pro Spieler (Minuten):", font=("Helvetica", 14)).pack(pady=(10, 2))
@@ -101,10 +94,9 @@ class HostView(ctk.CTkFrame):
         self.time_entry.insert(0, str(self.prefs.get("last_time", 15)))
         self.time_entry.pack(pady=(0, 10))
 
-        # --- STRAFZEIT & REGELN ---
         frame_rules = ctk.CTkFrame(form_frame)
         frame_rules.pack(pady=5, padx=20, fill="x")
-        ctk.CTkLabel(frame_rules, text="Strafzeit für Speilpausierung (Sekunden):", font=("Helvetica", 14)).pack(
+        ctk.CTkLabel(frame_rules, text="Strafzeit für Spielpausierung (Sekunden):", font=("Helvetica", 14)).pack(
             pady=(10, 2))
         self.penalty_entry = ctk.CTkEntry(frame_rules, font=("Helvetica", 14), justify="center", width=120)
         self.penalty_entry.insert(0, str(self.prefs.get("last_penalty", 0)))
@@ -118,7 +110,6 @@ class HostView(ctk.CTkFrame):
         else:
             self.distribute_switch.deselect()
 
-        # --- PROJEKT AUSWAHL ---
         frame_file = ctk.CTkFrame(form_frame)
         frame_file.pack(pady=5, padx=20, fill="x")
         ctk.CTkLabel(frame_file, text="Match-Ordner Modus:", font=("Helvetica", 14, "bold")).pack(pady=(10, 5))
@@ -136,7 +127,6 @@ class HostView(ctk.CTkFrame):
         self.file_label = ctk.CTkLabel(frame_file, text="Wird geladen...", text_color="gray", font=("Helvetica", 12))
         self.file_label.pack(pady=(0, 10))
 
-        # --- ERSTELLEN BUTTON ---
         self.btn_create = ctk.CTkButton(form_frame, text="RAUM ERSTELLEN", height=50, width=250,
                                         font=("Helvetica", 16, "bold"),
                                         fg_color="#1DB954", hover_color="#14833b", command=self.create_room)
@@ -201,10 +191,8 @@ class HostView(ctk.CTkFrame):
             self.error_label.configure(text="Zeiten müssen Zahlen sein!")
             return
 
-        # Hier speichern wir jetzt den PFAD statt nur den Namen
         display_name = self.template_var.get()
         self.game_state.selected_template_path = self.template_data.get(display_name, "")
-
         self.game_state.distribute_time = self.distribute_switch.get() == 1
 
         self.prefs["last_time"] = self.game_state.start_time_minutes
@@ -219,8 +207,11 @@ class HostView(ctk.CTkFrame):
 
         self.game_state.players = [self.game_state.my_name]
         self.game_state.active_players = [self.game_state.my_name]
-        self.game_state.times = {self.game_state.my_name: self.game_state.start_time_minutes * 60}
-        self.game_state.bonus_texts = {self.game_state.my_name: ""}
+
+        # FIX: Sauberes Setzen der Host-Zeiten über das neue Setter-System!
+        self.game_state.set_player_time(self.game_state.my_name, self.game_state.start_time_minutes * 60)
+        self.game_state.set_bonus_text(self.game_state.my_name, "")
+
         self.game_state.room_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
 
         self.router.show_lobby()

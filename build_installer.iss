@@ -1,43 +1,45 @@
 [Setup]
 ; Grundlegende App-Informationen
 AppName=Beatrace
-AppVersion=1.1.1
+AppVersion=1.2.0
 AppPublisher=kiiidnigh
 AppPublisherURL=https://github.com/kiiidnigh/beatrace-game
+DefaultGroupName=Beatrace
 SetupIconFile=assets\icon.ico
+UninstallDisplayIcon={app}\Beatrace.exe
 
-; WICHTIG: Das hier sorgt dafür, dass keine Admin-Rechte (UAC) abgefragt werden!
-; Das Programm wird lautlos im AppData-Verzeichnis des Nutzers installiert.
+; Installation im User-Verzeichnis (keine Admin-Rechte nötig)
 PrivilegesRequired=lowest
 DefaultDirName={autopf}\Beatrace
 
-; Wo der fertige Installer abgelegt werden soll
+; Output-Einstellungen
 OutputDir=.\installer
-OutputBaseFilename=Beatrace_Installer_v1.1.1
+OutputBaseFilename=Beatrace_Installer_v1.2.0
 
-; Komprimierung (macht die Datei kleiner)
-Compression=lzma
+; Komprimierungseinstellungen
+Compression=lzma2/max
 SolidCompression=yes
 
-; Sorgt dafür, dass alte Versionen beim Auto-Update sauber überschrieben werden
+; Sorgt für sauberes Überschreiben bei Updates
 UpdateUninstallLogAppName=no
 
 [Tasks]
-; Erstellt die Checkbox für das Desktop-Icon (Standardmäßig abgewählt)
 Name: "desktopicon"; Description: "Desktop-Verknüpfung erstellen"; GroupDescription: "Zusätzliche Symbole:"; Flags: unchecked
 
 [Files]
-; 1. Nimm die generierte EXE aus dem dist-Ordner
-Source: "dist\Beatrace.exe"; DestDir: "{app}"; Flags: ignoreversion
-; 2. Nimm den Assets-Ordner (für das FL Studio Template)
+; 1. Der gesamte Inhalt des PyInstaller Verzeichnisses (onedir Modus)
+; WICHTIG: Hier wird das gesamte Verzeichnis genommen, da wir kein --onefile nutzen
+Source: "dist\Beatrace\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; 2. Der Assets-Ordner (wird separat neben die EXE gelegt)
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-; Startmenü-Verknüpfung (Damit man es über die Windows-Suche findet)
+; Startmenü-Verknüpfung
 Name: "{autoprograms}\Beatrace"; Filename: "{app}\Beatrace.exe"
-; Desktop-Verknüpfung (Wenn der Nutzer das Häkchen setzt)
+; Desktop-Verknüpfung
 Name: "{autodesktop}\Beatrace"; Filename: "{app}\Beatrace.exe"; Tasks: desktopicon
 
 [Run]
-; Option am Ende der Installation: "Beatrace jetzt starten"
-Filename: "{app}\Beatrace.exe"; Description: "Beatrace starten"; Flags: nowait postinstall skipifsilent
+; Option, die App nach der Installation direkt zu starten
+Filename: "{app}\Beatrace.exe"; Description: "Beatrace jetzt starten"; Flags: nowait postinstall skipifsilent

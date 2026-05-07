@@ -12,13 +12,21 @@ class LobbyView(ctk.CTkFrame):
         self.router = router
         self.player_labels = {}
 
-        # 1. WICHTIG: Alte Geister-Verbindungen kappen, bevor wir neu starten!
-        EventBus.clear_all()
+        self._is_destroyed = False
+
+        self._listeners = {
+            "NET_CONNECTED": lambda d: self.safe_execute(self._apply_connected),
+            "NET_CLIENT_JOIN": lambda d: self.safe_execute(self._apply_client_join, d),
+            "NET_NAME_TAKEN": lambda d: self.safe_execute(self._apply_name_taken, d),
+            "NET_SYNC_STATE": lambda d: self.safe_execute(self._apply_sync_state, d),
+            "NET_CLIENT_LEAVE": lambda d: self.safe_execute(self._apply_client_leave, d),
+            "NET_LOBBY_CLOSED": lambda d: self.safe_execute(self._apply_lobby_closed),
+            "NET_START_MATCH": lambda d: self.safe_execute(self.router.start_game)
+        }
 
         self.setup_ui()
         self._setup_event_listeners()
 
-        # 2. Netzwerkverbindung aufbauen
         self.network.connect(self.game_state.my_name, self.game_state.room_code)
 
         if self.game_state.is_host:
@@ -26,28 +34,38 @@ class LobbyView(ctk.CTkFrame):
             self.update_player_list()
 
     def _setup_event_listeners(self):
-        EventBus.subscribe("NET_CONNECTED", lambda d: self.safe_execute(self._on_connected))
-        EventBus.subscribe("NET_CLIENT_JOIN", lambda d: self.safe_execute(self._on_client_join, d))
-        EventBus.subscribe("NET_NAME_TAKEN", lambda d: self.safe_execute(self._on_name_taken, d))
-        EventBus.subscribe("NET_SYNC_STATE", lambda d: self.safe_execute(self._on_sync_state, d))
-        EventBus.subscribe("NET_CLIENT_LEAVE", lambda d: self.safe_execute(self._on_client_leave, d))
-        EventBus.subscribe("NET_LOBBY_CLOSED", lambda d: self.safe_execute(self._on_lobby_closed))
-        EventBus.subscribe("NET_START_MATCH", lambda d: self.safe_execute(self.router.start_game))
+        for event, func in self._listeners.items():
+            EventBus.subscribe(event, func)
+
+    def destroy(self):
+        """Cleanup: Meldet die View sauber ab."""
+        self._is_destroyed = True
+        for event, func in self._listeners.items():
+            EventBus.unsubscribe(event, func)
+
+        # FIX für CustomTkinter Race-Condition:
+        self.pack_forget()
+        self.after(100, lambda: ctk.CTkFrame.destroy(self))
 
     def safe_execute(self, func, *args):
-        if self.winfo_exists():
-            self.after(0, lambda: func(*args))
+        """Kugelsichere Ausführung von UI-Updates im Main Thread."""
+
+        def wrapper():
+            if not self._is_destroyed and self.winfo_exists():
+                try:
+                    func(*args)
+                except Exception:
+                    pass
+
+        self.after(0, wrapper)
 
     def setup_ui(self):
-        # 1. Main Container (Nimmt den ganzen Platz ein)
         main_container = ctk.CTkFrame(self, fg_color="transparent")
         main_container.pack(fill="both", expand=True)
 
-        # 2. Kompakter Center Block (Wird zentriert)
         center_frame = ctk.CTkFrame(main_container, fg_color="transparent")
         center_frame.pack(expand=True)
 
-        # --- HEADER BEREICH ---
         ctk.CTkLabel(center_frame, text="LOBBY CODE", font=("Helvetica", 14, "bold"), text_color="gray").pack(
             pady=(0, 5))
 
@@ -61,7 +79,6 @@ class LobbyView(ctk.CTkFrame):
                                       fg_color="#2D3436", hover_color="#636E72", command=self.copy_code)
         self.btn_copy.pack(side="left")
 
-        # --- SETTINGS BEREICH ---
         self.settings_frame = ctk.CTkFrame(center_frame)
         self.settings_frame.pack(fill="x", pady=20)
         self.lbl_settings = ctk.CTkLabel(self.settings_frame, text="Lade Spieleinstellungen...", text_color="gray",
@@ -71,7 +88,6 @@ class LobbyView(ctk.CTkFrame):
         if self.game_state.is_host:
             self.update_settings_ui()
 
-        # --- SPIELERLISTE ---
         list_container = ctk.CTkFrame(center_frame, fg_color="transparent")
         list_container.pack(fill="x", pady=10)
 
@@ -80,7 +96,6 @@ class LobbyView(ctk.CTkFrame):
         self.players_frame = ctk.CTkScrollableFrame(list_container, fg_color="#1e1e1e", width=450, height=180)
         self.players_frame.pack(fill="x")
 
-        # --- ACTION BUTTONS ---
         self.action_frame = ctk.CTkFrame(center_frame, fg_color="transparent")
         self.action_frame.pack(fill="x", pady=(30, 0))
 
@@ -163,12 +178,12 @@ class LobbyView(ctk.CTkFrame):
         messagebox.showinfo("Lobby geschlossen", "Der Host hat die Lobby geschlossen.")
         self.router.show_home()
 
-    def _on_connected(self):
+    def _apply_connected(self):
         if not self.game_state.is_host:
             logging.info("[LobbyView] Netzwerk verbunden. Sende Beitrittsanfrage...")
             self.network.send_signal("CLIENT_JOIN")
 
-    def _on_client_join(self, payload):
+    def _apply_client_join(self, payload):
         sender = payload.get("sender")
         if self.game_state.is_host:
             logging.info(f"[LobbyView] Spieler {sender} möchte beitreten.")
@@ -179,21 +194,18 @@ class LobbyView(ctk.CTkFrame):
             self.game_state.players.append(sender)
             self.game_state.active_players.append(sender)
             self.game_state.ready_players.add(sender)
-            self.game_state.times[sender] = self.game_state.start_time_minutes * 60
-            self.game_state.bonus_texts[sender] = ""
+            self.game_state.set_player_time(sender, self.game_state.start_time_minutes * 60)
+            self.game_state.set_bonus_text(sender, "")
 
             self.update_player_list()
+            self.network.send_signal("SYNC_STATE", data=self.game_state.export_sync_data())
 
-            sync_data = self.game_state.export_sync_data()
-            self.network.send_signal("SYNC_STATE", data=sync_data)
-
-    def _on_name_taken(self, payload):
+    def _apply_name_taken(self, payload):
         data = payload.get("data", {})
-        if not self.game_state.is_host:
-            if data.get("target") == self.game_state.my_name:
-                self._handle_name_taken()
+        if not self.game_state.is_host and data.get("target") == self.game_state.my_name:
+            self._handle_name_taken()
 
-    def _on_sync_state(self, payload):
+    def _apply_sync_state(self, payload):
         data = payload.get("data", {})
         if not self.game_state.is_host:
             logging.info("[LobbyView] Synchronisiere Daten vom Host...")
@@ -202,7 +214,7 @@ class LobbyView(ctk.CTkFrame):
             self.update_settings_ui()
             self.update_player_list()
 
-    def _on_client_leave(self, payload):
+    def _apply_client_leave(self, payload):
         sender = payload.get("sender")
         if self.game_state.is_host:
             logging.info(f"[LobbyView] Spieler {sender} hat die Lobby verlassen.")
@@ -211,9 +223,8 @@ class LobbyView(ctk.CTkFrame):
             if sender in self.game_state.ready_players: self.game_state.ready_players.remove(sender)
 
             self.update_player_list()
-            sync_data = self.game_state.export_sync_data()
-            self.network.send_signal("SYNC_STATE", data=sync_data)
+            self.network.send_signal("SYNC_STATE", data=self.game_state.export_sync_data())
 
-    def _on_lobby_closed(self):
+    def _apply_lobby_closed(self):
         if not self.game_state.is_host:
             self._handle_lobby_closed()
