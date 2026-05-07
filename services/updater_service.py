@@ -18,6 +18,7 @@ class UpdaterService:
     def __init__(self, root_window):
         self.root = root_window
         self.api_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
+        self.loading_window = None
 
     def check_for_updates(self):
         """Startet die Update-Prüfung in einem Hintergrund-Thread, um die UI nicht einzufrieren."""
@@ -70,37 +71,52 @@ class UpdaterService:
             f"Eine neue Version von Beatrace ({latest_version}) ist verfügbar.\n\nMöchtest du sie jetzt herunterladen und installieren?"
         )
         if result:
-            self._download_and_install(download_url)
+            # FIX 1: Den Download in einen eigenen Thread auslagern (Verhindert UI-Freeze)
+            threading.Thread(target=self._download_and_install, args=(download_url,), daemon=True).start()
 
     def _download_and_install(self, download_url):
-        # Zeige einen Lade-Dialog
-        loading_window = ctk.CTkToplevel(self.root)
-        loading_window.title("Update")
-        loading_window.geometry("300x100")
-        loading_window.attributes('-topmost', True)
-        ctk.CTkLabel(loading_window, text="Lade Update herunter...\nBitte warten.", font=("Helvetica", 14)).pack(
-            expand=True)
-        self.root.update()
+        # 1. Ladebildschirm über den Main-Thread anzeigen
+        def show_loading():
+            self.loading_window = ctk.CTkToplevel(self.root)
+            self.loading_window.title("Update läuft")
+            self.loading_window.geometry("300x120")
+            self.loading_window.attributes('-topmost', True)
+            self.loading_window.resizable(False, False)
+
+            ctk.CTkLabel(self.loading_window, text="Lade Update herunter...\nDie App schließt sich gleich.",
+                         font=("Helvetica", 14)).pack(expand=True)
+            self.root.update()
+
+        self.root.after(0, show_loading)
 
         try:
-            # Lade den Installer in den versteckten Temp-Ordner von Windows
+            # 2. Den Download im Hintergrund durchführen
             temp_dir = tempfile.gettempdir()
             installer_path = os.path.join(temp_dir, "Beatrace_Update_Installer.exe")
 
-            response = requests.get(download_url, stream=True)
+            response = requests.get(download_url, stream=True, timeout=15)
             response.raise_for_status()
 
             with open(installer_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+                    if chunk:
+                        f.write(chunk)
 
             logging.info(f"[Updater] Installer erfolgreich nach {installer_path} heruntergeladen.")
 
-            # Starte den neuen Installer und schließe die aktuelle App!
-            subprocess.Popen([installer_path])
-            sys.exit()
+            # 3. Wenn fertig, Installer starten und App mit Gewallt killen (Verhindert DLL Error)
+            def execute_installer():
+                subprocess.Popen([installer_path])
+                os._exit(0)  # FIX 2: Tötet die App sofort und gibt die Dateien für den Installer frei!
+
+            self.root.after(0, execute_installer)
 
         except Exception as e:
-            loading_window.destroy()
             logging.error(f"[Updater] Fehler beim Download des Updates: {e}")
-            messagebox.showerror("Update fehlgeschlagen", f"Das Update konnte nicht heruntergeladen werden.\n{e}")
+
+            def show_error():
+                if self.loading_window and self.loading_window.winfo_exists():
+                    self.loading_window.destroy()
+                messagebox.showerror("Update fehlgeschlagen", f"Das Update konnte nicht heruntergeladen werden.\n{e}")
+
+            self.root.after(0, show_error)
