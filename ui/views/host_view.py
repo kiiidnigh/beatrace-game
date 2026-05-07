@@ -5,7 +5,7 @@ import string
 import os
 import re
 from config import settings
-from utils.file_utils import load_prefs, save_prefs
+from utils.file_utils import load_prefs, save_prefs, get_available_templates, open_template_folder
 
 
 class HostView(ctk.CTkFrame):
@@ -21,7 +21,15 @@ class HostView(ctk.CTkFrame):
         self.selected_base_folder = self.prefs.get("last_folder", "")
         self.selected_match_dir = ""
 
-        self.setup_ui()
+        # NEU: Template-Map laden
+        self.template_data = get_available_templates()
+        self.available_names = sorted(list(self.template_data.keys()))
+
+        # Standardwert finden
+        default_val = next((n for n in self.available_names if "default.flp" in n),
+                           self.available_names[0] if self.available_names else "Keine Templates")
+
+        self.setup_ui(default_val)
 
     def get_next_foldername(self, base_folder):
         max_num = 0
@@ -35,7 +43,7 @@ class HostView(ctk.CTkFrame):
             pass
         return f"Beatrace_Match_{max_num + 1}"
 
-    def setup_ui(self):
+    def setup_ui(self, default_val):
         # Header (Oben verankert)
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
         header_frame.pack(fill="x", padx=20, pady=(20, 0))
@@ -48,11 +56,42 @@ class HostView(ctk.CTkFrame):
         main_container = ctk.CTkFrame(self, fg_color="transparent")
         main_container.pack(fill="both", expand=True)
 
-        # Kompakter Formular-Block (ohne expand=True im Inneren!)
+        # Kompakter Formular-Block
         form_frame = ctk.CTkFrame(main_container, fg_color="transparent")
-        form_frame.pack(expand=True)  # Zentriert das gesamte Formular als einen festen Block
+        form_frame.pack(expand=True)
 
         ctk.CTkLabel(form_frame, text="Spiel konfigurieren", font=("Helvetica", 28, "bold")).pack(pady=(0, 20))
+
+        # --- TEMPLATE AUSWAHL ---
+        frame_template = ctk.CTkFrame(form_frame)
+        frame_template.pack(pady=5, padx=20, fill="x")
+
+        ctk.CTkLabel(frame_template, text="FL Studio Start-Template:", font=("Helvetica", 14, "bold")).pack(
+            pady=(10, 2), padx=15, anchor="w")
+
+        temp_select_frame = ctk.CTkFrame(frame_template, fg_color="transparent")
+        temp_select_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+        self.template_var = ctk.StringVar(value=default_val)
+        self.template_menu = ctk.CTkOptionMenu(
+            temp_select_frame,
+            values=self.available_names,  # FIX: Hier steht jetzt korrekt available_names!
+            variable=self.template_var,
+            width=280,
+            fg_color="#2D3436",
+            button_color="#636E72"
+        )
+        self.template_menu.pack(side="left", padx=5)
+
+        btn_manage = ctk.CTkButton(
+            temp_select_frame,
+            text="📁 Verwalten",
+            width=100,
+            fg_color="transparent",
+            border_width=1,
+            command=open_template_folder
+        )
+        btn_manage.pack(side="left", padx=5)
 
         # --- ZEITEINSTELLUNGEN ---
         frame_time = ctk.CTkFrame(form_frame)
@@ -65,10 +104,10 @@ class HostView(ctk.CTkFrame):
         # --- STRAFZEIT & REGELN ---
         frame_rules = ctk.CTkFrame(form_frame)
         frame_rules.pack(pady=5, padx=20, fill="x")
-        ctk.CTkLabel(frame_rules, text="Strafzeit für Pause-Nutzung (Sekunden):", font=("Helvetica", 14)).pack(
+        ctk.CTkLabel(frame_rules, text="Strafzeit für Speilpausierung (Sekunden):", font=("Helvetica", 14)).pack(
             pady=(10, 2))
         self.penalty_entry = ctk.CTkEntry(frame_rules, font=("Helvetica", 14), justify="center", width=120)
-        self.penalty_entry.insert(0, str(self.prefs.get("last_penalty", 30)))
+        self.penalty_entry.insert(0, str(self.prefs.get("last_penalty", 0)))
         self.penalty_entry.pack(pady=(0, 10))
 
         self.distribute_switch = ctk.CTkSwitch(frame_rules, text="Restzeit aufteilen, wenn Spieler aufgibt/fertig ist",
@@ -112,13 +151,11 @@ class HostView(ctk.CTkFrame):
         self.router.show_home()
 
     def on_file_mode_change(self, value):
-        if value == "Automatisch":
-            self.apply_auto_mode()
-        elif value == "Manuell Wählen":
-            success = self.choose_folder()
-            if not success:
-                self.mode_var.set("Automatisch")
-                self.apply_auto_mode()
+        if value == "Manuell Wählen":
+            self.choose_folder()
+            self.mode_var.set("Automatisch")
+
+        self.apply_auto_mode()
 
     def apply_auto_mode(self):
         if self.selected_base_folder and os.path.exists(self.selected_base_folder):
@@ -143,14 +180,12 @@ class HostView(ctk.CTkFrame):
 
         path = filedialog.askdirectory(
             initialdir=initial_dir,
-            title="Wähle oder erstelle einen spezifischen Match-Ordner..."
+            title="Wähle deinen Cloud Basis-Ordner (z.B. Google Drive/BeatRace)"
         )
         if path:
-            self.selected_match_dir = path
-            self.selected_base_folder = os.path.dirname(path)
+            self.selected_base_folder = path
             self.prefs["last_folder"] = self.selected_base_folder
             save_prefs(self.prefs)
-            self.update_file_label(is_auto=False)
             return True
         return False
 
@@ -165,6 +200,10 @@ class HostView(ctk.CTkFrame):
         except ValueError:
             self.error_label.configure(text="Zeiten müssen Zahlen sein!")
             return
+
+        # Hier speichern wir jetzt den PFAD statt nur den Namen
+        display_name = self.template_var.get()
+        self.game_state.selected_template_path = self.template_data.get(display_name, "")
 
         self.game_state.distribute_time = self.distribute_switch.get() == 1
 

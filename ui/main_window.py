@@ -5,6 +5,7 @@ import time
 from core.game_state import GameState
 from network.mqtt_client import NetworkManager
 from services.updater_service import UpdaterService
+from services.telemetry_service import TelemetryService
 
 from utils.process import is_fl_running, kill_all_fl_instances
 
@@ -22,13 +23,10 @@ class MainWindow(ctk.CTk):
         self.title("Beatrace Manager")
 
         # --- ADAPTIVES LAYOUT ---
-        # Das Fenster startet schoen gross, damit FL Studio gut Platz daneben hat
         self.geometry("1000x700")
-
-        # Verhindert, dass das Fenster kaputt-skaliert wird und Buttons verschwinden
         self.minsize(800, 600)
-
         ctk.set_appearance_mode("dark")
+        self._setup_toolbar()
 
         self.game_state = GameState()
         self.network = NetworkManager()
@@ -46,7 +44,56 @@ class MainWindow(ctk.CTk):
         self.show_home()
 
         self.updater = UpdaterService(self)
-        self.after(1000, self.updater.check_for_updates)  # 1 Sekunde nach Start prüfen
+        self.after(1000, self.updater.check_for_updates)
+
+    def _setup_toolbar(self):
+        """Erstellt eine fixe Toolbar am oberen Bildschirmrand."""
+        self.toolbar = ctk.CTkFrame(self, height=30, corner_radius=0, fg_color="#111111")
+        self.toolbar.pack(side="top", fill="x")
+
+        btn_help = ctk.CTkButton(self.toolbar, text="Bug melden", width=100, height=24,
+                                 fg_color="transparent", hover_color="#c0392b", text_color="lightgray",
+                                 command=self._send_bug_report)
+        btn_help.pack(side="right", padx=10, pady=3)
+
+    def _send_bug_report(self):
+        """Öffnet das Textfenster für Bug-Reports."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Bug melden")
+        dialog.geometry("500x400")
+        dialog.attributes('-topmost', True)
+        dialog.resizable(False, False)
+
+        ctk.CTkLabel(dialog, text="Was genau ist schief gelaufen?", font=("Helvetica", 16, "bold")).pack(pady=(20, 10))
+
+        textbox = ctk.CTkTextbox(dialog, width=450, height=200)
+        textbox.pack(pady=10)
+
+        ctk.CTkLabel(dialog, text="Systemdaten und der aktuelle Log werden automatisch angehängt.",
+                     text_color="gray", font=("Helvetica", 12)).pack(pady=(0, 10))
+
+        def submit():
+            user_msg = textbox.get("1.0", "end-1c").strip()
+            if not user_msg:
+                user_msg = "Keine Beschreibung angegeben."
+
+            btn_submit.configure(state="disabled", text="Sende...")
+
+            def on_done(success):
+                if dialog.winfo_exists():
+                    dialog.destroy()
+                if success:
+                    messagebox.showinfo("Gesendet", "Vielen Dank! Der Bug Report wurde erfolgreich übermittelt.")
+                else:
+                    messagebox.showerror("Fehler",
+                                         "Report konnte nicht gesendet werden. Überprüfe deine Internetverbindung.")
+
+            TelemetryService.send_crash_report(user_message=user_msg,
+                                               callback=lambda s: self.after(0, lambda: on_done(s)))
+
+        btn_submit = ctk.CTkButton(dialog, text="Report Senden", fg_color="#c0392b", hover_color="#e74c3c",
+                                   command=submit)
+        btn_submit.pack(pady=10)
 
     # --- WACHHUND LOGIK ---
     def start_global_fl_monitor(self):
@@ -77,7 +124,6 @@ class MainWindow(ctk.CTk):
             self.warning_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
             self.warning_overlay.lift()
 
-            # Responsive Zentrierung fuer das Overlay
             center_frame = ctk.CTkFrame(self.warning_overlay, fg_color="transparent")
             center_frame.pack(expand=True)
 

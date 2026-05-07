@@ -2,16 +2,19 @@ import os
 import sys
 import logging
 from datetime import datetime
-from config.settings import APPDATA_DIR
+from config import settings  # FIX: Settings komplett importieren
 from ui.main_window import MainWindow
 
+
 def setup_logging():
-    # Logs landen in %AppData%\Beatrace\logs
-    log_dir = os.path.join(APPDATA_DIR, "logs")
+    log_dir = os.path.join(settings.APPDATA_DIR, "logs")
     os.makedirs(log_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_filename = os.path.join(log_dir, f"beatrace_instance_{timestamp}_PID{os.getpid()}.log")
+
+    # NEU: Log-Pfad für den Telemetry Service global verfügbar machen
+    settings.CURRENT_LOG_FILE = log_filename
 
     logging.basicConfig(
         level=logging.DEBUG,
@@ -31,15 +34,20 @@ def setup_logging():
     sys.excepthook = handle_exception
     logging.info("=" * 40)
     logging.info(f"Beatrace Manager gestartet (PID: {os.getpid()})")
-    logging.info(f"Speicherort Daten: {APPDATA_DIR}")
+    logging.info(f"Speicherort Daten: {settings.APPDATA_DIR}")
     logging.info("=" * 40)
+
 
 if __name__ == "__main__":
     setup_logging()
     try:
         app = MainWindow()
+
+
         def tk_report_exception(self, exc_type, exc_value, exc_traceback):
             logging.error("Tkinter Callback Exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+
         app.report_callback_exception = tk_report_exception.__get__(app, MainWindow)
         app.mainloop()
     except Exception:

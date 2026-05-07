@@ -2,60 +2,57 @@ import time
 import threading
 import psutil
 from pynput import mouse
-from utils.process import is_fl_running, get_active_window_title, force_save_and_close_fl, FL_PROCESS_NAME
+from utils.process import is_fl_running, force_save_and_close_fl, FL_PROCESS_NAME
 
 
 class FLWatcher:
     def __init__(self):
-        self._is_monitoring = False
-        self._monitor_thread = None
+        # FIX: Unabhängige Schalter für Multitasking!
+        self._monitoring_start = False
+        self._monitoring_interaction = False
+        self._monitoring_exit = False
 
     def wait_for_start(self, callback):
-        self.stop()
-        self._is_monitoring = True
+        self._monitoring_start = False
+        self._monitoring_start = True
 
         def loop():
-            while self._is_monitoring:
+            while self._monitoring_start:
                 if is_fl_running():
-                    self._is_monitoring = False
+                    self._monitoring_start = False
                     if callback: callback()
                     return
                 time.sleep(0.5)
 
-        self._monitor_thread = threading.Thread(target=loop, daemon=True)
-        self._monitor_thread.start()
+        threading.Thread(target=loop, daemon=True).start()
 
     def wait_for_interaction(self, callback):
-        self.stop()
-        self._is_monitoring = True
+        self._monitoring_interaction = False
+        self._monitoring_interaction = True
 
         def loop():
             def on_click(x, y, button, pressed):
-                if pressed and self._is_monitoring:
-                    # FIX: Windows 50ms Zeit geben, um FL Studio in den Vordergrund zu holen
-                    time.sleep(0.05)
-                    if "fl studio" in get_active_window_title():
-                        self._is_monitoring = False
-                        if callback: callback()
-                        return False
+                if pressed and self._monitoring_interaction:
+                    self._monitoring_interaction = False
+                    if callback: callback()
+                    return False
 
             with mouse.Listener(on_click=on_click) as listener:
-                while self._is_monitoring and listener.running:
+                while self._monitoring_interaction and listener.running:
                     time.sleep(0.1)
-                if not self._is_monitoring and listener.running:
+                if not self._monitoring_interaction and listener.running:
                     listener.stop()
 
-        self._monitor_thread = threading.Thread(target=loop, daemon=True)
-        self._monitor_thread.start()
+        threading.Thread(target=loop, daemon=True).start()
 
     def wait_for_exit(self, callback):
-        self.stop()
-        self._is_monitoring = True
+        self._monitoring_exit = False
+        self._monitoring_exit = True
 
         def loop():
             target_proc = None
 
-            while self._is_monitoring and not target_proc:
+            while self._monitoring_exit and not target_proc:
                 for p in psutil.process_iter(['name']):
                     try:
                         if p.info['name'] and p.info['name'].lower() == FL_PROCESS_NAME:
@@ -66,16 +63,16 @@ class FLWatcher:
                 if not target_proc:
                     time.sleep(0.5)
 
+            # Wenn der Prozess gefunden wurde, warte bis er stirbt
             if target_proc:
-                while self._is_monitoring and target_proc.is_running():
-                    time.sleep(0.1)
+                while self._monitoring_exit and target_proc.is_running():
+                    time.sleep(0.2)
 
-            if self._is_monitoring:
-                self._is_monitoring = False
+            if self._monitoring_exit:
+                self._monitoring_exit = False
                 if callback: callback()
 
-        self._monitor_thread = threading.Thread(target=loop, daemon=True)
-        self._monitor_thread.start()
+        threading.Thread(target=loop, daemon=True).start()
 
     def auto_save_and_close(self):
         """Versucht FL Studio sauber mit Auto-Save zu beenden."""
@@ -92,4 +89,7 @@ class FLWatcher:
         threading.Thread(target=run, daemon=True).start()
 
     def stop(self):
-        self._is_monitoring = False
+        """Stoppt alle Überwachungen sofort (z.B. beim Verlassen des Spiels)."""
+        self._monitoring_start = False
+        self._monitoring_interaction = False
+        self._monitoring_exit = False

@@ -14,10 +14,13 @@ class GameState:
         self.penalty_seconds = 0
         self.distribute_time = False
 
-        # NEU: Aufteilung in Basis-Ordner, Match-Ordner und standardisierte ZIP
+        # Aufteilung in Basis-Ordner, Match-Ordner und standardisierte ZIP
         self.local_drive_folder = ""
         self.match_folder_name = ""
-        self.project_filename = "project.zip"  # Heißt ab jetzt immer so!
+        self.project_filename = "project.zip"
+
+        # FIX: Diese Variable muss immer existieren, damit der Client nicht abstürzt!
+        self.selected_template_path = ""
 
         self.times = {}
         self.bonus_texts = {}
@@ -28,14 +31,22 @@ class GameState:
     @property
     def local_match_dir(self):
         """Der Pfad zum aktuellen Match-Ordner."""
+        if not self.local_drive_folder:
+            return ""
+
         if self.match_folder_name:
             return os.path.join(self.local_drive_folder, self.match_folder_name)
+
         return self.local_drive_folder
 
     @property
     def local_project_path(self):
         """Der Pfad zur eigentlichen ZIP-Datei im Match-Ordner."""
-        return os.path.join(self.local_match_dir, self.project_filename)
+        match_dir = self.local_match_dir
+        if not match_dir or not self.project_filename:
+            return ""
+
+        return os.path.join(match_dir, self.project_filename)
 
     def load_sync_data(self, data):
         self.players = data.get("players", [])
@@ -44,7 +55,6 @@ class GameState:
         self.penalty_seconds = data.get("penalty_seconds", 0)
         self.distribute_time = data.get("distribute_time", False)
 
-        # NEU: Match-Ordner wird vom Host an die Clients synchronisiert
         self.match_folder_name = data.get("match_folder_name", "")
         self.project_filename = data.get("project_filename", "project.zip")
 

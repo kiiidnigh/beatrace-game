@@ -65,6 +65,9 @@ class GameView(ctk.CTkFrame):
         EventBus.subscribe("DAW_INTERACTION_DETECTED", lambda d: self.after(0, self._start_my_timer_ui))
         EventBus.subscribe("DAW_PROCESS_CLOSED", lambda d: self.after(0, self._process_turn_end))
 
+        # Hört auf den Klick beim Fortsetzen
+        EventBus.subscribe("DAW_RESUME_CLICK_DETECTED", lambda d: self.after(0, self._on_resume_click))
+
         EventBus.subscribe("SYNC_LOCK_RELEASED", lambda d: self.after(0, self._on_sync_lock_released, d))
         EventBus.subscribe("SYNC_LOCK_TIMEOUT", lambda d: self.after(0, self._on_sync_lock_timeout))
         EventBus.subscribe("SYNC_DOWNLOAD_COMPLETED", lambda d: self.after(0, self._on_download_finished, d))
@@ -96,7 +99,7 @@ class GameView(ctk.CTkFrame):
         self.control_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.control_frame.pack(fill="x", side="bottom", pady=(10, 30))
 
-        self.btn_pause = ctk.CTkButton(self.control_frame, text="PAUSE", width=200, height=50, state="disabled",
+        self.btn_pause = ctk.CTkButton(self.control_frame, text="PAUSE", width=250, height=50, state="disabled",
                                        font=("Helvetica", 16, "bold"),
                                        command=lambda: EventBus.emit("CMD_TOGGLE_PAUSE"))
         self.btn_pause.pack(expand=True)
@@ -116,17 +119,27 @@ class GameView(ctk.CTkFrame):
     def _ui_on_pause(self, data):
         player = data.get("player")
         if player == self.game_state.my_name:
-            self.btn_pause.configure(text=f"WEITER (-{self.game_state.penalty_seconds}s)", fg_color="#e67e22",
-                                     hover_color="#d35400")
+            # Button sperren und Nutzer auffordern zu klicken
+            self.btn_pause.configure(text=f"KLICKE ZUM FORTSETZEN (-{self.game_state.penalty_seconds}s)",
+                                     fg_color="#e67e22", state="disabled")
+            # Minimales Delay, damit das Loslassen des Pause-Buttons nicht sofort als "Resume-Klick" gewertet wird
+            self.after(500, lambda: EventBus.emit("CMD_WAIT_RESUME_CLICK"))
+
         self.status_label.configure(text=f"PAUSIERT", text_color="#e67e22")
 
     def _ui_on_resume(self, data):
         player = data.get("player")
         if player == self.game_state.my_name:
-            self.btn_pause.configure(text="PAUSE", fg_color=["#3a7ebf", "#1f538d"])
+            # Button wieder in den Normalzustand versetzen
+            self.btn_pause.configure(state="normal", text="PAUSE", fg_color=["#3a7ebf", "#1f538d"])
             self.status_label.configure(text="Dein Zug läuft!", text_color="#1DB954")
         else:
             self.status_label.configure(text=f"{player}'s Zug läuft...", text_color="white")
+
+    # Wird vom Mausklick getriggert
+    def _on_resume_click(self):
+        if self.match_controller.is_paused:
+            EventBus.emit("CMD_TOGGLE_PAUSE")
 
     def _ui_on_timer_tick(self, data):
         time_str = self.match_controller.format_time(data.get("time_left"))
@@ -162,14 +175,19 @@ class GameView(ctk.CTkFrame):
 
         if next_player == self.game_state.my_name:
             self.status_label.configure(text="Öffne DAW...", text_color="yellow")
-            EventBus.emit("CMD_LAUNCH_DAW", data={"project_path": self.game_state.local_project_path,
-                                                  "template_path": get_template_path()})
+
+            actual_template = get_template_path(self.game_state.selected_template_path)
+
+            EventBus.emit("CMD_LAUNCH_DAW", data={
+                "project_path": self.game_state.local_project_path,
+                "template_path": actual_template
+            })
         else:
             self.status_label.configure(text=f"Download fertig! Warte auf {next_player}...", text_color="gray")
 
     def _on_daw_started(self):
         EventBus.emit("UX_START_TURN")
-        self.status_label.configure(text="Klicke in die DAW, um den Timer zu starten!", text_color="yellow")
+        self.status_label.configure(text="Timer startet beim nächsten Klick!", text_color="yellow")
         EventBus.emit("UX_SHOW_WARNING", data={"text": "Warten auf Klick..."})
         EventBus.emit("CMD_WAIT_DAW_INTERACTION")
 
@@ -182,6 +200,9 @@ class GameView(ctk.CTkFrame):
     def _process_turn_end(self):
         if self.game_state.active_player != self.game_state.my_name: return
 
+        # FIX (Timer Asynchronität): Wir löschen den aktiven Spieler LOKAL sofort
+        self.game_state.active_player = None
+
         EventBus.emit("UX_END_TURN")
         self.btn_pause.configure(state="disabled")
 
@@ -193,12 +214,18 @@ class GameView(ctk.CTkFrame):
 
     def _on_sync_lock_timeout(self):
         self.status_label.configure(text="Fehler beim Lesen der Datei!", text_color="red")
-        is_eliminated = self.game_state.times.get(self.game_state.my_name, 0) <= 0
+
+        # ABSOLUT KUGELSICHER: Wenn self._is_time_up True ist, ignorieren wir jegliche Float-Werte!
+        is_eliminated = self._is_time_up or (self.game_state.times.get(self.game_state.my_name, 0) <= 0)
+
         EventBus.emit("CMD_END_TURN_ELIMINATED" if is_eliminated else "CMD_END_TURN_SUCCESS", data={"file_hash": None})
 
     def _on_sync_lock_released(self, data):
         self.status_label.configure(text="Prüfsumme berechnet...", text_color="yellow")
-        is_eliminated = self.game_state.times.get(self.game_state.my_name, 0) <= 0
+
+        # ABSOLUT KUGELSICHER: Wenn self._is_time_up True ist, ignorieren wir jegliche Float-Werte!
+        is_eliminated = self._is_time_up or (self.game_state.times.get(self.game_state.my_name, 0) <= 0)
+
         EventBus.emit("CMD_END_TURN_ELIMINATED" if is_eliminated else "CMD_END_TURN_SUCCESS",
                       data={"file_hash": data.get("hash")})
 

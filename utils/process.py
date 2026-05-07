@@ -9,19 +9,6 @@ VK_RETURN = 0x0D  # Windows Hex-Code für die ENTER-Taste
 KEYEVENTF_KEYUP = 0x0002
 
 
-def get_active_window_title():
-    """Liest den Titel des aktuell fokussierten Fensters in Windows aus."""
-    try:
-        hwnd = ctypes.windll.user32.GetForegroundWindow()
-        length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
-        buf = ctypes.create_unicode_buffer(length + 1)
-        ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
-        return buf.value.lower()
-    except Exception as e:
-        logging.warning(f"[ProcessUtil] Fehler beim Lesen des Fenster-Titels: {e}")
-        return ""
-
-
 def is_fl_running():
     for proc in psutil.process_iter(['name']):
         try:

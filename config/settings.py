@@ -50,6 +50,10 @@ DRIVE_PROJECT_PATH = os.path.join(BASE_DIR, "test_projekt.zip")
 
 FL_STUDIO_PATH = find_fl_studio_path()
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
+
+# --- TELEMETRY ---
+CURRENT_LOG_FILE = ""  # Wird zur Laufzeit von main.py gefüllt
+TELEMETRY_URL = "https://discord.com/api/webhooks/1501934166080487597/NLo5R-7pdmL_BXBP3yyu3-XdmJW1JrE9HaZjn0iLmatIz7LIXQjx0ojTDAjaE_hklNt0" # Dummy-Endpoint für deinen späteren Server
 
 

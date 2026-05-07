@@ -46,7 +46,7 @@ class MiniPlayer(ctk.CTkToplevel):
                                        anchor="w")
         self.lbl_player.pack(fill="x")
 
-        self.lbl_time = ctk.CTkLabel(text_frame, text="Lädt...", font=("Helvetica", 16, "bold"), anchor="w")
+        self.lbl_time = ctk.CTkLabel(text_frame, text="Warte auf Klick..", font=("Helvetica", 16, "bold"), anchor="w")
         self.lbl_time.pack(fill="x")
 
         # HIER DER FIX: Anstatt eine Methode der View aufzurufen, emitten wir ein Event!

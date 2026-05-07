@@ -18,6 +18,11 @@ class DAWService:
         EventBus.subscribe("CMD_LAUNCH_DAW", self._handle_launch)
         EventBus.subscribe("CMD_WAIT_DAW_INTERACTION", lambda d: self.watcher.wait_for_interaction(
             callback=lambda: EventBus.emit("DAW_INTERACTION_DETECTED")))
+
+        # Warte auf einen Klick, um das Spiel nach der Pause fortzusetzen
+        EventBus.subscribe("CMD_WAIT_RESUME_CLICK", lambda d: self.watcher.wait_for_interaction(
+            callback=lambda: EventBus.emit("DAW_RESUME_CLICK_DETECTED")))
+
         EventBus.subscribe("CMD_WAIT_DAW_EXIT",
                            lambda d: self.watcher.wait_for_exit(callback=lambda: EventBus.emit("DAW_PROCESS_CLOSED")))
         EventBus.subscribe("CMD_FORCE_AUTO_SAVE", lambda d: self.watcher.auto_save_and_close())
