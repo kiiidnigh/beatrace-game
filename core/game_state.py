@@ -29,6 +29,9 @@ class GameState:
         self.ready_players = set()
         self.eliminated_players = set()
 
+        # NEU: Zentraler Cache für die finalen Match Statistiken (DRY Prinzip)
+        self.match_stats = {}
+
     def reset_match_data(self):
         """Setzt alle laufenden Spieldaten sicher zurück (z.B. beim Betreten des Hauptmenüs)."""
         self.players.clear()
@@ -37,6 +40,7 @@ class GameState:
         self.eliminated_players.clear()
         self._times.clear()
         self._bonus_texts.clear()
+        self.match_stats.clear()  # NEU
         self.active_player = None
         self.room_code = ""
 

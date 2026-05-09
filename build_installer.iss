@@ -1,45 +1,38 @@
 [Setup]
-; Grundlegende App-Informationen
+; Grundlegende App-Informationen [cite: 1]
 AppName=Beatrace
-AppVersion=1.2.0
+AppVersion=1.3.0
 AppPublisher=kiiidnigh
 AppPublisherURL=https://github.com/kiiidnigh/beatrace-game
-DefaultGroupName=Beatrace
 SetupIconFile=assets\icon.ico
-UninstallDisplayIcon={app}\Beatrace.exe
 
-; Installation im User-Verzeichnis (keine Admin-Rechte nötig)
+; Installation im AppData-Verzeichnis [cite: 2]
 PrivilegesRequired=lowest
 DefaultDirName={autopf}\Beatrace
-
-; Output-Einstellungen
 OutputDir=.\installer
-OutputBaseFilename=Beatrace_Installer_v1.2.0
+OutputBaseFilename=Beatrace_Installer_v1.3.0
 
-; Komprimierungseinstellungen
+; Komprimierung [cite: 3]
 Compression=lzma2/max
 SolidCompression=yes
-
-; Sorgt für sauberes Überschreiben bei Updates
 UpdateUninstallLogAppName=no
 
 [Tasks]
+; Desktop-Icon Checkbox [cite: 4]
 Name: "desktopicon"; Description: "Desktop-Verknüpfung erstellen"; GroupDescription: "Zusätzliche Symbole:"; Flags: unchecked
 
 [Files]
-; 1. Der gesamte Inhalt des PyInstaller Verzeichnisses (onedir Modus)
-; WICHTIG: Hier wird das gesamte Verzeichnis genommen, da wir kein --onefile nutzen
+; WICHTIG: Nimmt ALLES aus dem dist\Beatrace Ordner (inklusive _internal)
 Source: "dist\Beatrace\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-
-; 2. Der Assets-Ordner (wird separat neben die EXE gelegt)
+; Nimmt den Assets-Ordner [cite: 6]
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-; Startmenü-Verknüpfung
+; Startmenü [cite: 7]
 Name: "{autoprograms}\Beatrace"; Filename: "{app}\Beatrace.exe"
-; Desktop-Verknüpfung
+; Desktop [cite: 8]
 Name: "{autodesktop}\Beatrace"; Filename: "{app}\Beatrace.exe"; Tasks: desktopicon
 
 [Run]
-; Option, die App nach der Installation direkt zu starten
-Filename: "{app}\Beatrace.exe"; Description: "Beatrace jetzt starten"; Flags: nowait postinstall skipifsilent
+; Startoption nach Installation
+Filename: "{app}\Beatrace.exe"; Description: "Beatrace starten"; Flags: nowait postinstall skipifsilent

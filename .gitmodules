@@ -1,0 +1,3 @@
+[submodule "libs/pyflp"]
+	path = libs/pyflp
+	url = https://github.com/kiiidnigh/PyFLP.git

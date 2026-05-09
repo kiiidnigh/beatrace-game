@@ -1,8 +1,12 @@
+# ================================================
+# FILE: main.py
+# ================================================
 import os
 import sys
 import logging
 from datetime import datetime
-from config import settings  # FIX: Settings komplett importieren
+from config import settings
+from services.sound_service import SoundService
 from ui.main_window import MainWindow
 
 
@@ -13,7 +17,6 @@ def setup_logging():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_filename = os.path.join(log_dir, f"beatrace_instance_{timestamp}_PID{os.getpid()}.log")
 
-    # NEU: Log-Pfad für den Telemetry Service global verfügbar machen
     settings.CURRENT_LOG_FILE = log_filename
 
     logging.basicConfig(
@@ -33,7 +36,7 @@ def setup_logging():
 
     sys.excepthook = handle_exception
     logging.info("=" * 40)
-    logging.info(f"Beatrace Manager gestartet (PID: {os.getpid()})")
+    logging.info(f"Beatrace Client gestartet (PID: {os.getpid()})")
     logging.info(f"Speicherort Daten: {settings.APPDATA_DIR}")
     logging.info("=" * 40)
 
@@ -41,6 +44,10 @@ def setup_logging():
 if __name__ == "__main__":
     setup_logging()
     try:
+        # Startet den Sound Service global.
+        # Er klinkt sich automatisch in die UI Buttons ein.
+        sound_service = SoundService()
+
         app = MainWindow()
 
 

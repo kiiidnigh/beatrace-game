@@ -1,0 +1,14 @@
+# --- UI & System ---
+customtkinter
+psutil
+pynput
+
+# --- Netzwerk & Web ---
+paho-mqtt
+requests
+
+# --- Audio & Media ---
+pygame-ce
+
+# --- Lokale Submodule ---
+-e ./libs/pyflp

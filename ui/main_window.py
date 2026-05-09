@@ -20,7 +20,7 @@ class MainWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Beatrace Manager")
+        self.title("Beatrace Client")
         self.geometry("1000x700")
         self.minsize(800, 600)
         ctk.set_appearance_mode("dark")
