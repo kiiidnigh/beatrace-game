@@ -1,7 +1,11 @@
+# ================================================
+# FILE: ui/components/mini_player.py
+# ================================================
 import customtkinter as ctk
 import logging
 from utils.file_utils import load_prefs, save_prefs
 from core.event_bus import EventBus
+from core.i18n import translate
 
 
 class MiniPlayer(ctk.CTkToplevel):
@@ -15,7 +19,6 @@ class MiniPlayer(ctk.CTkToplevel):
         self.attributes('-topmost', True)
         self.configure(fg_color="#1e1e1e")
 
-        # Lade die letzte gespeicherte Position oder nutze Standardwerte
         last_x = self.prefs.get("mini_player_x", 100)
         last_y = self.prefs.get("mini_player_y", 100)
 
@@ -32,6 +35,20 @@ class MiniPlayer(ctk.CTkToplevel):
         self.setup_ui()
         self.bind_drag()
 
+        EventBus.subscribe("LANGUAGE_CHANGED", self._on_language_changed)
+
+    def destroy(self):
+        EventBus.unsubscribe("LANGUAGE_CHANGED", self._on_language_changed)
+        super().destroy()
+
+    def _on_language_changed(self, data=None):
+        # Aktualisiert die Standard-Texte. Falls gerade ein Turn läuft,
+        # überschreibt der UX-Service diese ohnehin beim nächsten Tick.
+        if self.lbl_player.cget("text") in ["Status", "System"]:
+            self.lbl_player.configure(text=translate("mini_player.status_default"))
+        if self.lbl_time.cget("text") in ["Warte auf Klick...", "Waiting for click..."]:
+            self.lbl_time.configure(text=translate("mini_player.waiting_for_click"))
+
     def setup_ui(self):
         info_frame = ctk.CTkFrame(self, fg_color="transparent")
         info_frame.pack(side="left", fill="both", expand=True, padx=10)
@@ -42,14 +59,15 @@ class MiniPlayer(ctk.CTkToplevel):
         text_frame = ctk.CTkFrame(info_frame, fg_color="transparent")
         text_frame.pack(side="left", fill="both", expand=True, pady=10)
 
-        self.lbl_player = ctk.CTkLabel(text_frame, text="Status", font=("Helvetica", 12), text_color="#1DB954",
+        self.lbl_player = ctk.CTkLabel(text_frame, text=translate("mini_player.status_default"), font=("Helvetica", 12),
+                                       text_color="#1DB954",
                                        anchor="w")
         self.lbl_player.pack(fill="x")
 
-        self.lbl_time = ctk.CTkLabel(text_frame, text="Warte auf Klick...", font=("Helvetica", 16, "bold"), anchor="w")
+        self.lbl_time = ctk.CTkLabel(text_frame, text=translate("mini_player.waiting_for_click"),
+                                     font=("Helvetica", 16, "bold"), anchor="w")
         self.lbl_time.pack(fill="x")
 
-        # Der Button sendet weiterhin den Befehl, wird aber visuell strikt als Pause-Button genutzt
         self.btn_pause = ctk.CTkButton(self, text="||", width=40, height=40, state="disabled",
                                        command=lambda: EventBus.emit("CMD_TOGGLE_PAUSE"))
         self.btn_pause.pack(side="right", padx=10)
@@ -69,7 +87,6 @@ class MiniPlayer(ctk.CTkToplevel):
         self.prefs["mini_player_x"] = self.winfo_x()
         self.prefs["mini_player_y"] = self.winfo_y()
         save_prefs(self.prefs)
-        logging.debug(f"[MiniPlayer] Position gespeichert: X={self.winfo_x()}, Y={self.winfo_y()}")
 
     def do_move(self, event):
         deltax = event.x - self._x
@@ -79,7 +96,7 @@ class MiniPlayer(ctk.CTkToplevel):
         self.geometry(f"+{x}+{y}")
 
     def update_status(self, text, is_warning=False):
-        self.lbl_player.configure(text="System")
+        self.lbl_player.configure(text=translate("mini_player.system"))
         self.btn_pause.configure(state="disabled")
         color = "yellow" if is_warning else "white"
 
@@ -91,11 +108,9 @@ class MiniPlayer(ctk.CTkToplevel):
 
         if is_paused:
             self.lbl_time.configure(text_color="#e67e22")
-            self.lbl_player.configure(text="PAUSIERT. Warte auf Klick...")
-            # Button wird lediglich deaktiviert, da das Fortsetzen nur über DAW-Klick geschieht
+            self.lbl_player.configure(text=translate("mini_player.paused"))
             self.btn_pause.configure(state="disabled", text="||", fg_color=["#3a7ebf", "#1f538d"])
         else:
             self.lbl_time.configure(text_color="white")
-            self.lbl_player.configure(text="Dein Zug")
-            # Button ist bereit, um das Spiel zu pausieren
+            self.lbl_player.configure(text=translate("mini_player.your_turn"))
             self.btn_pause.configure(state="normal", text="||", fg_color=["#3a7ebf", "#1f538d"])

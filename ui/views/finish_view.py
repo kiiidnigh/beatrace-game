@@ -1,6 +1,11 @@
+# ================================================
+# FILE: ui/views/finish_view.py
+# ================================================
 import customtkinter as ctk
 import os
 import subprocess
+from core.i18n import translate
+from core.event_bus import EventBus
 
 
 class FinishView(ctk.CTkFrame):
@@ -9,66 +14,73 @@ class FinishView(ctk.CTkFrame):
         self.game_state = game_state
         self.network = network
         self.router = router
-
-        # DRY: Wir nutzen die bereits vom MatchController gecachten Stats!
-        # Kein doppeltes Entpacken oder Rechnen mehr nötig.
         self.match_stats = self.game_state.match_stats
 
+        self._is_destroyed = False
         self.setup_ui()
+        EventBus.subscribe("LANGUAGE_CHANGED", self._on_language_changed)
+
+    def destroy(self):
+        self._is_destroyed = True
+        EventBus.unsubscribe("LANGUAGE_CHANGED", self._on_language_changed)
+        self.pack_forget()
+        self.after(100, lambda: ctk.CTkFrame.destroy(self))
+
+    def _on_language_changed(self, data=None):
+        if not self._is_destroyed and self.winfo_exists():
+            self.update_texts()
+
+    def update_texts(self):
+        self.lbl_title.configure(text=translate("finish.title"))
+        self.lbl_subtitle.configure(text=translate("finish.subtitle"))
+        self.lbl_proj_data.configure(text=translate("finish.project_data_title"))
+        self.lbl_awards.configure(text=translate("finish.awards_title"))
+        self.btn_open.configure(text=translate("finish.btn_open_project"))
+        self.btn_home.configure(text=translate("finish.btn_home"))
 
     def setup_ui(self):
         main_container = ctk.CTkFrame(self, fg_color="transparent")
         main_container.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # 1. Header
         header_frame = ctk.CTkFrame(main_container, fg_color="transparent")
         header_frame.pack(fill="x", pady=(0, 20))
 
-        ctk.CTkLabel(header_frame, text="BEATRACE BEENDET!", font=("Helvetica", 42, "bold"),
-                     text_color="#1DB954").pack()
-        ctk.CTkLabel(header_frame, text="Alle Spieler haben ihre Zeit aufgebraucht oder abgegeben.",
-                     font=("Helvetica", 16), text_color="gray").pack()
+        self.lbl_title = ctk.CTkLabel(header_frame, text=translate("finish.title"), font=("Helvetica", 42, "bold"), text_color="#1DB954")
+        self.lbl_title.pack()
+        self.lbl_subtitle = ctk.CTkLabel(header_frame, text=translate("finish.subtitle"), font=("Helvetica", 16), text_color="gray")
+        self.lbl_subtitle.pack()
 
-        # 2. Split Content (Beide Seiten scrollbar)
         content_frame = ctk.CTkFrame(main_container, fg_color="transparent")
         content_frame.pack(fill="both", expand=True)
 
-        # ==========================================
-        # LINKE SEITE: Projekt Daten (Scrollable)
-        # ==========================================
         left_panel = ctk.CTkScrollableFrame(content_frame, fg_color="#1e1e1e", width=400, corner_radius=10)
         left_panel.pack(side="left", fill="both", expand=True, padx=(0, 10))
 
-        ctk.CTkLabel(left_panel, text="Projekt Daten", font=("Helvetica", 20, "bold")).pack(pady=(15, 15))
+        self.lbl_proj_data = ctk.CTkLabel(left_panel, text=translate("finish.project_data_title"), font=("Helvetica", 20, "bold"))
+        self.lbl_proj_data.pack(pady=(15, 15))
 
-        # Dynamische Generierung der Projekt-Fakten Karten
         project_data = self.match_stats.get("project_data", {})
-
-        # Dateigröße als manuelle Karte
-        self._create_stat_row(left_panel, "💾 Dateigröße", self.match_stats.get("file_size", "0.00 MB"))
+        self._create_stat_row(left_panel, translate("finish.stat_file_size"), self.match_stats.get("file_size", "0.00 MB"))
 
         if not project_data:
-            ctk.CTkLabel(left_panel, text="Keine Daten extrahiert.", text_color="gray").pack(pady=20)
+            ctk.CTkLabel(left_panel, text=translate("finish.no_data"), text_color="gray").pack(pady=20)
         else:
             for title, value in project_data.items():
                 self._create_stat_row(left_panel, title, value)
 
-        # Version Info ganz unten im Scroll-Bereich
-        ctk.CTkLabel(left_panel, text=f"FL Studio Version: {self.match_stats.get('fl_version', 'Unbekannt')}",
-                     font=("Helvetica", 12), text_color="gray").pack(pady=(20, 10))
+        v_text = translate("finish.fl_version_prefix").format(self.match_stats.get('fl_version',
+                                                                                   translate("common.unknown")))
+        ctk.CTkLabel(left_panel, text=v_text, font=("Helvetica", 12), text_color="gray").pack(pady=(20, 10))
 
-        # ==========================================
-        # RECHTE SEITE: Awards (Scrollable)
-        # ==========================================
         right_panel = ctk.CTkScrollableFrame(content_frame, fg_color="#2D3436", width=400, corner_radius=10)
         right_panel.pack(side="right", fill="both", expand=True, padx=(10, 0))
 
-        ctk.CTkLabel(right_panel, text="🏆 Match Awards", font=("Helvetica", 20, "bold"), text_color="#f1c40f").pack(
-            pady=(15, 15))
+        self.lbl_awards = ctk.CTkLabel(right_panel, text=translate("finish.awards_title"), font=("Helvetica", 20, "bold"), text_color="#f1c40f")
+        self.lbl_awards.pack(pady=(15, 15))
 
         awards = self.match_stats.get("awards", {})
         if not awards:
-            ctk.CTkLabel(right_panel, text="Nicht genug Daten für Auszeichnungen gesammelt.", font=("Helvetica", 14),
+            ctk.CTkLabel(right_panel, text=translate("finish.no_awards"), font=("Helvetica", 14),
                          text_color="gray").pack(expand=True, pady=50)
         else:
             for title, winner in awards.items():
@@ -81,29 +93,26 @@ class FinishView(ctk.CTkFrame):
                                                                                                        padx=15,
                                                                                                        pady=(0, 10))
 
-        # 3. Footer / Aktionen
         btn_frame = ctk.CTkFrame(main_container, fg_color="transparent")
         btn_frame.pack(pady=(20, 0))
 
-        btn_open = ctk.CTkButton(btn_frame, text="FINALES PROJEKT ÖFFNEN", height=50, width=250,
-                                 font=("Helvetica", 14, "bold"),
-                                 fg_color="#8e44ad", hover_color="#9b59b6", command=self.open_project_folder)
-        btn_open.pack(side="left", padx=10)
+        self.btn_open = ctk.CTkButton(btn_frame, text=translate("finish.btn_open_project"), height=50, width=250,
+                                      font=("Helvetica", 14, "bold"),
+                                      fg_color="#8e44ad", hover_color="#9b59b6", command=self.open_project_folder)
+        self.btn_open.pack(side="left", padx=10)
 
-        btn_home = ctk.CTkButton(btn_frame, text="ZURÜCK ZUM HAUPTMENÜ", height=50, width=250,
-                                 font=("Helvetica", 14, "bold"),
-                                 fg_color="#636E72", hover_color="#2D3436", command=self.go_home)
-        btn_home.pack(side="left", padx=10)
+        self.btn_home = ctk.CTkButton(btn_frame, text=translate("finish.btn_home"), height=50, width=250,
+                                      font=("Helvetica", 14, "bold"),
+                                      fg_color="#636E72", hover_color="#2D3436", command=self.go_home)
+        self.btn_home.pack(side="left", padx=10)
 
     def _create_stat_row(self, parent, title, value):
-        """Hilfsfunktion für flache, platzsparende Karten in der Liste."""
         box = ctk.CTkFrame(parent, fg_color="#2D3436", corner_radius=8, height=60)
         box.pack(fill="x", padx=15, pady=6)
         box.pack_propagate(False)
 
         ctk.CTkLabel(box, text=title, font=("Helvetica", 14), text_color="gray").pack(side="left", padx=15)
-        ctk.CTkLabel(box, text=str(value), font=("Helvetica", 16, "bold"), text_color="white").pack(side="right",
-                                                                                                    padx=15)
+        ctk.CTkLabel(box, text=str(value), font=("Helvetica", 16, "bold"), text_color="white").pack(side="right", padx=15)
 
     def open_project_folder(self):
         path = self.game_state.local_project_path

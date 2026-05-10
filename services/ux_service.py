@@ -1,8 +1,12 @@
+# ================================================
+# FILE: services/ux_service.py
+# ================================================
 import logging
 from pynput import keyboard
 from ui.components.mini_player import MiniPlayer
 from ui.components.toast import ToastNotification
 from core.event_bus import EventBus
+from core.i18n import translate
 
 
 class UXService:
@@ -43,9 +47,9 @@ class UXService:
     def _on_pause_event(self, is_paused, player_name):
         if self.ui_mode == "Stealth" and player_name == self.game_state_ref.my_name:
             if is_paused:
-                ToastNotification("PAUSIERT!", color="#e67e22")
+                ToastNotification(self.root_window, translate("ux.paused"), color="#e67e22")
             else:
-                ToastNotification("WEITER GEHTS!", color="#1DB954")
+                ToastNotification(self.root_window, translate("ux.resumed"), color="#1DB954")
 
     def start_turn(self):
         self._notified_milestones.clear()
@@ -53,7 +57,7 @@ class UXService:
             if not self.mini_player:
                 self.mini_player = MiniPlayer(self.root_window)
         elif self.ui_mode == "Stealth":
-            ToastNotification("DAW läuft! Klicke in die DAW, um zu starten.")
+            ToastNotification(self.root_window, translate("ux.daw_running"))
             self.hotkey_listener = keyboard.GlobalHotKeys({'<ctrl>+<shift>+p': self._stealth_pause_hotkey})
             self.hotkey_listener.start()
 
@@ -88,16 +92,17 @@ class UXService:
             self._notified_milestones.add(sec_left)
             mins = sec_left // 60
             secs = sec_left % 60
-            ToastNotification(f"Noch {mins}:{secs:02d} übrig!", color="#e67e22")
+            msg = translate("ux.time_left_min_sec").format(mins=mins, secs=f"{secs:02d}")
+            ToastNotification(self.root_window, msg, color="#e67e22")
 
         if 0 < sec_left <= 10:
+            msg = translate("ux.time_left_sec").format(secs=sec_left)
             if sec_left not in self._notified_milestones:
                 self._notified_milestones.add(sec_left)
                 if self.countdown_toast and self.countdown_toast.winfo_exists():
-                    self.countdown_toast.update_text(f"Noch {sec_left} Sekunden!")
+                    self.countdown_toast.update_text(msg)
                 else:
-                    self.countdown_toast = ToastNotification(f"Noch {sec_left} Sekunden!", color="#c0392b",
-                                                             duration=12000)
+                    self.countdown_toast = ToastNotification(self.root_window, msg, color="#c0392b", duration=12000)
         elif sec_left <= 0:
             if self.countdown_toast and self.countdown_toast.winfo_exists():
                 self.countdown_toast.destroy()

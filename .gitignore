@@ -21,5 +21,6 @@ codebase.txt
 build/
 dist/
 installer/
+#libs
 *.spec
 digest.txt

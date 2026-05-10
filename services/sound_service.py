@@ -32,7 +32,11 @@ class SoundService:
 
         if PYGAME_AVAILABLE:
             try:
+                # PROFESIONELLER FIX: Feste Buffer- und Frequenz-Werte für Windows-Konsistenz!
+                # 44100 Hz (CD-Qualität), -16 (16-bit signed Audio), 1 (Mono), 512 (sehr niedrige Latenz)
+                pygame.mixer.pre_init(frequency=44100, size=-16, channels=1, buffer=512)
                 pygame.mixer.init()
+
                 self._load_sounds()
                 self._monkeypatch_ctk_buttons()
             except Exception as e:
@@ -77,10 +81,20 @@ class SoundService:
             "eliminated": "eliminated.wav",
             "match_finish": "finish.wav"
         }
+
+        sounds_loaded = 0
         for key, filename in sound_files.items():
             path = os.path.join(base_dir, filename)
             if os.path.exists(path):
-                self.sounds[key] = pygame.mixer.Sound(path)
+                try:
+                    self.sounds[key] = pygame.mixer.Sound(path)
+                    sounds_loaded += 1
+                except Exception as e:
+                    logging.error(f"[SoundService] Konnte Sound {filename} nicht laden: {e}")
+            else:
+                logging.debug(f"[SoundService] Sounddatei fehlt: {path}")
+
+        logging.info(f"[SoundService] {sounds_loaded} Sounds erfolgreich geladen.")
 
     def _reload_settings(self, data=None):
         self.prefs = load_prefs().get("sounds", {})

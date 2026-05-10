@@ -1,3 +1,6 @@
+# ================================================
+# FILE: ui/views/host_view.py
+# ================================================
 import customtkinter as ctk
 import tkinter.filedialog as filedialog
 import random
@@ -6,6 +9,8 @@ import os
 import re
 from config import settings
 from utils.file_utils import load_prefs, save_prefs, get_available_templates, open_template_folder
+from core.i18n import translate
+from core.event_bus import EventBus
 
 
 class HostView(ctk.CTkFrame):
@@ -28,6 +33,36 @@ class HostView(ctk.CTkFrame):
                            self.available_names[0] if self.available_names else "Keine Templates")
 
         self.setup_ui(default_val)
+        EventBus.subscribe("LANGUAGE_CHANGED", self._on_language_changed)
+
+    def destroy(self):
+        EventBus.unsubscribe("LANGUAGE_CHANGED", self._on_language_changed)
+        self.pack_forget()
+        self.after(100, lambda: ctk.CTkFrame.destroy(self))
+
+    def _on_language_changed(self, data=None):
+        self.after(0, self.update_texts)
+
+    def update_texts(self):
+        self.btn_back.configure(text=translate("common.btn_back"))
+        self.lbl_title.configure(text=translate("host.title"))
+        self.lbl_template.configure(text=translate("host.template_label"))
+        self.btn_manage.configure(text=translate("host.btn_manage"))
+        self.lbl_time.configure(text=translate("host.time_label"))
+        self.lbl_penalty.configure(text=translate("host.penalty_label"))
+        self.distribute_switch.configure(text=translate("host.distribute_label"))
+        self.lbl_mode.configure(text=translate("host.folder_mode_label"))
+
+        # Segmented Button Labels updaten
+        new_values = [translate("host.mode_auto"), translate("host.mode_manual")]
+        current_val = self.mode_var.get()
+        mapped_val = new_values[0] if current_val in ["Automatisch", "Automatic"] else new_values[1]
+        self.seg_button.configure(values=new_values)
+        self.mode_var.set(mapped_val)
+
+        self.btn_create.configure(text=translate("host.btn_create"))
+        self.apply_auto_mode()
+        self.error_label.configure(text="")
 
     def get_next_foldername(self, base_folder):
         max_num = 0
@@ -45,9 +80,10 @@ class HostView(ctk.CTkFrame):
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
         header_frame.pack(fill="x", padx=20, pady=(20, 0))
 
-        btn_back = ctk.CTkButton(header_frame, text="◀ Zurück", width=80, height=35, font=("Helvetica", 14),
-                                 fg_color="#636E72", hover_color="#2D3436", command=self.go_back)
-        btn_back.pack(side="left")
+        self.btn_back = ctk.CTkButton(header_frame, text=translate("common.btn_back"), width=80, height=35,
+                                      font=("Helvetica", 14),
+                                      fg_color="#636E72", hover_color="#2D3436", command=self.go_back)
+        self.btn_back.pack(side="left")
 
         main_container = ctk.CTkFrame(self, fg_color="transparent")
         main_container.pack(fill="both", expand=True)
@@ -55,13 +91,14 @@ class HostView(ctk.CTkFrame):
         form_frame = ctk.CTkFrame(main_container, fg_color="transparent")
         form_frame.pack(expand=True)
 
-        ctk.CTkLabel(form_frame, text="Spiel konfigurieren", font=("Helvetica", 28, "bold")).pack(pady=(0, 20))
+        self.lbl_title = ctk.CTkLabel(form_frame, text=translate("host.title"), font=("Helvetica", 28, "bold"))
+        self.lbl_title.pack(pady=(0, 20))
 
         frame_template = ctk.CTkFrame(form_frame)
         frame_template.pack(pady=5, padx=20, fill="x")
 
-        ctk.CTkLabel(frame_template, text="FL Studio Start-Template:", font=("Helvetica", 14, "bold")).pack(
-            pady=(10, 2), padx=15, anchor="w")
+        self.lbl_template = ctk.CTkLabel(frame_template, text=translate("host.template_label"), font=("Helvetica", 14, "bold"))
+        self.lbl_template.pack(pady=(10, 2), padx=15, anchor="w")
 
         temp_select_frame = ctk.CTkFrame(frame_template, fg_color="transparent")
         temp_select_frame.pack(fill="x", padx=10, pady=(0, 10))
@@ -77,32 +114,33 @@ class HostView(ctk.CTkFrame):
         )
         self.template_menu.pack(side="left", padx=5)
 
-        btn_manage = ctk.CTkButton(
+        self.btn_manage = ctk.CTkButton(
             temp_select_frame,
-            text="📁 Verwalten",
+            text=translate("host.btn_manage"),
             width=100,
             fg_color="transparent",
             border_width=1,
             command=open_template_folder
         )
-        btn_manage.pack(side="left", padx=5)
+        self.btn_manage.pack(side="left", padx=5)
 
         frame_time = ctk.CTkFrame(form_frame)
         frame_time.pack(pady=5, padx=20, fill="x")
-        ctk.CTkLabel(frame_time, text="Startzeit pro Spieler (Minuten):", font=("Helvetica", 14)).pack(pady=(10, 2))
+        self.lbl_time = ctk.CTkLabel(frame_time, text=translate("host.time_label"), font=("Helvetica", 14))
+        self.lbl_time.pack(pady=(10, 2))
         self.time_entry = ctk.CTkEntry(frame_time, font=("Helvetica", 14), justify="center", width=120)
         self.time_entry.insert(0, str(self.prefs.get("last_time", 15)))
         self.time_entry.pack(pady=(0, 10))
 
         frame_rules = ctk.CTkFrame(form_frame)
         frame_rules.pack(pady=5, padx=20, fill="x")
-        ctk.CTkLabel(frame_rules, text="Strafzeit für Spielpausierung (Sekunden):", font=("Helvetica", 14)).pack(
-            pady=(10, 2))
+        self.lbl_penalty = ctk.CTkLabel(frame_rules, text=translate("host.penalty_label"), font=("Helvetica", 14))
+        self.lbl_penalty.pack(pady=(10, 2))
         self.penalty_entry = ctk.CTkEntry(frame_rules, font=("Helvetica", 14), justify="center", width=120)
         self.penalty_entry.insert(0, str(self.prefs.get("last_penalty", 0)))
         self.penalty_entry.pack(pady=(0, 10))
 
-        self.distribute_switch = ctk.CTkSwitch(frame_rules, text="Restzeit aufteilen, wenn Spieler aufgibt/fertig ist",
+        self.distribute_switch = ctk.CTkSwitch(frame_rules, text=translate("host.distribute_label"),
                                                font=("Helvetica", 13))
         self.distribute_switch.pack(pady=(0, 15))
         if self.prefs.get("last_distribute", True):
@@ -112,22 +150,23 @@ class HostView(ctk.CTkFrame):
 
         frame_file = ctk.CTkFrame(form_frame)
         frame_file.pack(pady=5, padx=20, fill="x")
-        ctk.CTkLabel(frame_file, text="Match-Ordner Modus:", font=("Helvetica", 14, "bold")).pack(pady=(10, 5))
+        self.lbl_mode = ctk.CTkLabel(frame_file, text=translate("host.folder_mode_label"), font=("Helvetica", 14, "bold"))
+        self.lbl_mode.pack(pady=(10, 5))
 
-        self.mode_var = ctk.StringVar(value="Automatisch")
+        self.mode_var = ctk.StringVar(value=translate("host.mode_auto"))
         self.seg_button = ctk.CTkSegmentedButton(
             frame_file,
-            values=["Automatisch", "Manuell Wählen"],
+            values=[translate("host.mode_auto"), translate("host.mode_manual")],
             command=self.on_file_mode_change,
             variable=self.mode_var,
             font=("Helvetica", 13)
         )
         self.seg_button.pack(pady=5)
 
-        self.file_label = ctk.CTkLabel(frame_file, text="Wird geladen...", text_color="gray", font=("Helvetica", 12))
+        self.file_label = ctk.CTkLabel(frame_file, text=translate("host.loading"), text_color="gray", font=("Helvetica", 12))
         self.file_label.pack(pady=(0, 10))
 
-        self.btn_create = ctk.CTkButton(form_frame, text="RAUM ERSTELLEN", height=50, width=250,
+        self.btn_create = ctk.CTkButton(form_frame, text=translate("host.btn_create"), height=50, width=250,
                                         font=("Helvetica", 16, "bold"),
                                         fg_color="#1DB954", hover_color="#14833b", command=self.create_room)
         self.btn_create.pack(pady=(20, 5))
@@ -141,10 +180,9 @@ class HostView(ctk.CTkFrame):
         self.router.show_home()
 
     def on_file_mode_change(self, value):
-        if value == "Manuell Wählen":
+        if value == translate("host.mode_manual"):
             self.choose_folder()
-            self.mode_var.set("Automatisch")
-
+            self.mode_var.set(translate("host.mode_auto"))
         self.apply_auto_mode()
 
     def apply_auto_mode(self):
@@ -155,22 +193,25 @@ class HostView(ctk.CTkFrame):
         else:
             self.selected_match_dir = ""
             self.file_label.configure(
-                text="Kein vorheriger Ordner gefunden.\nBitte wähle einmalig 'Manuell Wählen'.", text_color="orange")
+                text=translate("host.no_folder_warning"), text_color="orange")
 
     def update_file_label(self, is_auto=False):
         if self.selected_match_dir:
             base_name = os.path.basename(self.selected_base_folder)
             match_name = os.path.basename(self.selected_match_dir)
-            auto_text = "\n(Ordner wird beim Start automatisch erstellt)" if is_auto else ""
-            self.file_label.configure(text=f"Basis: .../{base_name}\nMatch-Ordner: {match_name}{auto_text}",
-                                      text_color="#1DB954")
+            auto_text = translate("host.auto_folder_suffix") if is_auto else ""
+
+            line1 = translate("host.base_folder_prefix").format(base_name)
+            line2 = translate("host.match_folder_prefix").format(match_name)
+
+            self.file_label.configure(text=f"{line1}\n{line2}{auto_text}", text_color="#1DB954")
 
     def choose_folder(self):
         initial_dir = self.selected_base_folder if self.selected_base_folder else os.path.expanduser("~")
 
         path = filedialog.askdirectory(
             initialdir=initial_dir,
-            title="Wähle deinen Cloud Basis-Ordner (z.B. Google Drive/BeatRace)"
+            title=translate("host.dialog_choose_folder")
         )
         if path:
             self.selected_base_folder = path
@@ -181,14 +222,14 @@ class HostView(ctk.CTkFrame):
 
     def create_room(self):
         if not self.selected_match_dir:
-            self.error_label.configure(text="Bitte wähle oder erstelle einen Match-Ordner!")
+            self.error_label.configure(text=translate("host.err_no_folder"))
             return
 
         try:
             self.game_state.start_time_minutes = int(self.time_entry.get())
             self.game_state.penalty_seconds = int(self.penalty_entry.get())
         except ValueError:
-            self.error_label.configure(text="Zeiten müssen Zahlen sein!")
+            self.error_label.configure(text=translate("host.err_times_numeric"))
             return
 
         display_name = self.template_var.get()
@@ -208,7 +249,6 @@ class HostView(ctk.CTkFrame):
         self.game_state.players = [self.game_state.my_name]
         self.game_state.active_players = [self.game_state.my_name]
 
-        # FIX: Sauberes Setzen der Host-Zeiten über das neue Setter-System!
         self.game_state.set_player_time(self.game_state.my_name, self.game_state.start_time_minutes * 60)
         self.game_state.set_bonus_text(self.game_state.my_name, "")
 

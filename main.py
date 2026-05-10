@@ -8,6 +8,7 @@ from datetime import datetime
 from config import settings
 from services.sound_service import SoundService
 from ui.main_window import MainWindow
+from core.i18n import Translator
 
 
 def setup_logging():
@@ -44,16 +45,17 @@ def setup_logging():
 if __name__ == "__main__":
     setup_logging()
     try:
+        # i18n System initialisieren, BEVOR die UI geladen wird
+        Translator.initialize()
+
         # Startet den Sound Service global.
         # Er klinkt sich automatisch in die UI Buttons ein.
         sound_service = SoundService()
 
         app = MainWindow()
 
-
         def tk_report_exception(self, exc_type, exc_value, exc_traceback):
             logging.error("Tkinter Callback Exception", exc_info=(exc_type, exc_value, exc_traceback))
-
 
         app.report_callback_exception = tk_report_exception.__get__(app, MainWindow)
         app.mainloop()
