@@ -12,6 +12,7 @@ from services.system_monitor_service import SystemMonitorService
 from utils.ui_utils import get_centered_geometry
 from core.event_bus import EventBus
 from core.i18n import translate
+from config.settings import VERSION
 
 from ui.views.home_view import HomeView
 from ui.views.host_view import HostView
@@ -25,7 +26,7 @@ class MainWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Beatrace Client")
+        self.title(f"Beatrace Client {VERSION}")
         self.geometry("1000x700")
         self.minsize(800, 600)
         ctk.set_appearance_mode("dark")
