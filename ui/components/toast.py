@@ -2,7 +2,7 @@
 # FILE: ui/components/toast.py
 # ================================================
 import customtkinter as ctk
-from utils.ui_utils import get_bottom_center_geometry
+from utils.ui_utils import get_bottom_right_geometry
 
 class ToastNotification(ctk.CTkToplevel):
     def __init__(self, master, message, color="#1DB954", duration=4000):
@@ -11,9 +11,8 @@ class ToastNotification(ctk.CTkToplevel):
         self.attributes('-topmost', True)
         self.configure(fg_color="#2D3436")
 
-        # Nutzt jetzt die saubere Helfer-Funktion aus den Utils
-        self.geometry(get_bottom_center_geometry(
-            master=master,
+        # FIX 2: Nutzt nun die Positionierung unten rechts im Bildschirm!
+        self.geometry(get_bottom_right_geometry(
             width=300,
             height=60,
             screen_width=self.winfo_screenwidth(),

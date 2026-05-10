@@ -1,3 +1,6 @@
+# ================================================
+# FILE: core/game_state.py
+# ================================================
 import os
 
 
@@ -13,75 +16,64 @@ class GameState:
         self.penalty_seconds = 0
         self.distribute_time = False
 
-        # Aufteilung in Basis-Ordner, Match-Ordner und standardisierte ZIP
         self.local_drive_folder = ""
         self.match_folder_name = ""
         self.project_filename = "project.zip"
-
-        # Diese Variable muss immer existieren, damit der Client nicht abstürzt!
         self.selected_template_path = ""
 
-        # Gekapselte Dictionaries für Zeiten und Texte
+        self.workspace_id = ""
+
         self._times = {}
         self._bonus_texts = {}
 
         self.active_player = None
         self.ready_players = set()
         self.eliminated_players = set()
+        self.verified_players = set()
 
-        # NEU: Zentraler Cache für die finalen Match Statistiken (DRY Prinzip)
         self.match_stats = {}
 
     def reset_match_data(self):
-        """Setzt alle laufenden Spieldaten sicher zurück (z.B. beim Betreten des Hauptmenüs)."""
         self.players.clear()
         self.active_players.clear()
         self.ready_players.clear()
         self.eliminated_players.clear()
+        self.verified_players.clear()
         self._times.clear()
         self._bonus_texts.clear()
-        self.match_stats.clear()  # NEU
+        self.match_stats.clear()
         self.active_player = None
         self.room_code = ""
+        self.workspace_id = ""
 
     @property
     def local_match_dir(self):
-        """Der Pfad zum aktuellen Match-Ordner."""
         if not self.local_drive_folder:
             return ""
-
         if self.match_folder_name:
             return os.path.join(self.local_drive_folder, self.match_folder_name)
-
         return self.local_drive_folder
 
     @property
     def local_project_path(self):
-        """Der Pfad zur eigentlichen ZIP-Datei im Match-Ordner."""
         match_dir = self.local_match_dir
         if not match_dir or not self.project_filename:
             return ""
-
         return os.path.join(match_dir, self.project_filename)
 
     def get_player_time(self, player_name, default=0):
-        """Gibt die Zeit eines Spielers sicher zurück."""
         return self._times.get(player_name, default)
 
     def set_player_time(self, player_name, time_seconds):
-        """Setzt die Zeit eines Spielers sicher."""
         self._times[player_name] = time_seconds
 
     def get_bonus_text(self, player_name):
-        """Gibt den Bonustext eines Spielers sicher zurück."""
         return self._bonus_texts.get(player_name, "")
 
     def set_bonus_text(self, player_name, text):
-        """Setzt den Bonustext eines Spielers sicher."""
         self._bonus_texts[player_name] = text
 
     def get_all_times_dict(self):
-        """Gibt eine Kopie der Zeiten für OBS oder UI zurück."""
         return dict(self._times)
 
     def load_sync_data(self, data):
@@ -90,9 +82,12 @@ class GameState:
         self.start_time_minutes = data.get("start_time_minutes", 15)
         self.penalty_seconds = data.get("penalty_seconds", 0)
         self.distribute_time = data.get("distribute_time", False)
-
         self.match_folder_name = data.get("match_folder_name", "")
         self.project_filename = data.get("project_filename", "project.zip")
+        self.workspace_id = data.get("workspace_id", "")
+
+        # FIX 2: Die verifizierten Spieler werden jetzt synchronisiert!
+        self.verified_players = set(data.get("verified_players", []))
 
         for player in self.players:
             if player not in self._times:
@@ -106,7 +101,10 @@ class GameState:
             "penalty_seconds": self.penalty_seconds,
             "distribute_time": self.distribute_time,
             "match_folder_name": self.match_folder_name,
-            "project_filename": self.project_filename
+            "project_filename": self.project_filename,
+            "workspace_id": self.workspace_id,
+            # FIX 2: Exportiere das Set als JSON-kompatible Liste
+            "verified_players": list(self.verified_players)
         }
 
     def update_time(self, player_name, elapsed_seconds):

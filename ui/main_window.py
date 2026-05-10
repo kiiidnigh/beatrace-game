@@ -9,6 +9,7 @@ from network.mqtt_client import NetworkManager
 from services.updater_service import UpdaterService
 from services.telemetry_service import TelemetryService
 from services.system_monitor_service import SystemMonitorService
+from services.handshake_service import HandshakeService
 from utils.ui_utils import get_centered_geometry
 from core.event_bus import EventBus
 from core.i18n import translate
@@ -31,24 +32,62 @@ class MainWindow(ctk.CTk):
         self.minsize(800, 600)
         ctk.set_appearance_mode("dark")
 
+        # FIX 1: Fange das Schließen-Event (X) vom Fenster ab!
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+
         self._setup_toolbar()
 
         self.game_state = GameState()
         self.network = NetworkManager()
         self.current_view = None
 
-        self.system_monitor = SystemMonitorService()
-        self.system_monitor.start()
-
         self.warning_overlay = None
         self._is_showing_lock_warning = False
 
         self._setup_event_listeners()
 
+        self.system_monitor = SystemMonitorService()
+        self.system_monitor.start()
+
+        self.handshake_service = HandshakeService()
+
         self.show_home()
 
         self.updater = UpdaterService(self)
         self.after(1000, self.updater.check_for_updates)
+
+    def _on_closing(self):
+        """Wird aufgerufen, wenn der Nutzer auf das X klickt."""
+        # Wenn wir gerade in einer aktiven Multiplayer-Session sind (Lobby oder Game)
+        if self.network.is_connected:
+            def confirm_quit():
+                self._force_quit()
+
+            CustomPopup(
+                master=self,
+                title="Beenden?",
+                message="Willst du Beatrace wirklich beenden?\nDie aktuelle Sitzung wird für alle abgebrochen.",
+                icon="⚠️",
+                btn_color="#e67e22",
+                sound_type="warning",
+                show_cancel=True,
+                confirm_text=translate("common.yes"),
+                cancel_text=translate("common.no"),
+                on_confirm_callback=confirm_quit
+            )
+        else:
+            self._force_quit()
+
+    def _force_quit(self):
+        """Beendet das Programm sauber und sendet Disconnect-Signale."""
+        if self.network.is_connected:
+            if self.game_state.is_host:
+                self.network.send_signal("LOBBY_CLOSED")
+            else:
+                self.network.send_signal("CLIENT_LEAVE")
+            self.network.disconnect()
+
+        self.destroy()
 
     def _setup_event_listeners(self):
         EventBus.subscribe("SYS_FL_WARNING_SHOW", lambda d: self.after(0, self.show_fl_warning_overlay))
@@ -135,7 +174,6 @@ class MainWindow(ctk.CTk):
         btn_submit.pack(pady=10)
 
     def show_fl_warning_overlay(self):
-        # FIX: Verhindert, dass das Overlay in einem minimierten Fenster gefangen bleibt
         if self.state() == "iconic":
             self.deiconify()
             self.lift()
@@ -170,8 +208,6 @@ class MainWindow(ctk.CTk):
         if not self._is_showing_lock_warning:
             self._is_showing_lock_warning = True
 
-            # FIX: Wenn die App minimiert in der Taskleiste liegt, zwingen wir sie auf
-            # den Bildschirm, BEVOR wir das modale Dialogfenster mit grab_set() öffnen.
             if self.state() == "iconic":
                 self.deiconify()
 
@@ -187,11 +223,13 @@ class MainWindow(ctk.CTk):
                 icon="⚠️",
                 btn_color="#e67e22",
                 sound_type="warning",
-                on_close_callback=unlock
+                on_confirm_callback=unlock,
+                on_cancel_callback=unlock
             )
 
     def destroy(self):
         self.system_monitor.stop()
+        self.handshake_service.cleanup()
         super().destroy()
 
     def switch_view(self, view_class, **kwargs):

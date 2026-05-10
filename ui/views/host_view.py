@@ -9,6 +9,7 @@ import os
 import re
 from config import settings
 from utils.file_utils import load_prefs, save_prefs, get_available_templates, open_template_folder
+from utils.ui_utils import TextAnimator
 from core.i18n import translate
 from core.event_bus import EventBus
 
@@ -33,15 +34,39 @@ class HostView(ctk.CTkFrame):
                            self.available_names[0] if self.available_names else "Keine Templates")
 
         self.setup_ui(default_val)
-        EventBus.subscribe("LANGUAGE_CHANGED", self._on_language_changed)
+
+        self.animator = TextAnimator(self)
+        self.animator.register(self._on_animate_tick)
+        self.animator.start()
+
+        self._listeners = {
+            "LANGUAGE_CHANGED": self._on_language_changed,
+            "SYS_WORKSPACE_READY": self._on_workspace_ready,
+            "SYS_HANDSHAKE_ERROR": self._on_handshake_error
+        }
+        for event, func in self._listeners.items():
+            EventBus.subscribe(event, func)
 
     def destroy(self):
-        EventBus.unsubscribe("LANGUAGE_CHANGED", self._on_language_changed)
+        self.animator.stop()
+        for event, func in self._listeners.items():
+            EventBus.unsubscribe(event, func)
         self.pack_forget()
         self.after(100, lambda: ctk.CTkFrame.destroy(self))
 
+    def _on_animate_tick(self, dots):
+        if self.btn_create.cget("state") == "disabled":
+            base = translate("host.loading").rstrip('.')
+            self.file_label.configure(text=f"{base}{dots}", text_color="orange")
+
     def _on_language_changed(self, data=None):
         self.after(0, self.update_texts)
+
+    def _on_handshake_error(self, data):
+        error_msg = data.get("error", "Unknown")
+        self.after(0, lambda: self.error_label.configure(text=f"Handshake Error: {error_msg}"))
+        self.after(0, lambda: self.btn_create.configure(state="normal"))
+        self.after(0, self.apply_auto_mode)
 
     def update_texts(self):
         self.btn_back.configure(text=translate("common.btn_back"))
@@ -53,7 +78,6 @@ class HostView(ctk.CTkFrame):
         self.distribute_switch.configure(text=translate("host.distribute_label"))
         self.lbl_mode.configure(text=translate("host.folder_mode_label"))
 
-        # Segmented Button Labels updaten
         new_values = [translate("host.mode_auto"), translate("host.mode_manual")]
         current_val = self.mode_var.get()
         mapped_val = new_values[0] if current_val in ["Automatisch", "Automatic"] else new_values[1]
@@ -61,7 +85,10 @@ class HostView(ctk.CTkFrame):
         self.mode_var.set(mapped_val)
 
         self.btn_create.configure(text=translate("host.btn_create"))
-        self.apply_auto_mode()
+
+        if self.btn_create.cget("state") != "disabled":
+            self.apply_auto_mode()
+
         self.error_label.configure(text="")
 
     def get_next_foldername(self, base_folder):
@@ -97,7 +124,8 @@ class HostView(ctk.CTkFrame):
         frame_template = ctk.CTkFrame(form_frame)
         frame_template.pack(pady=5, padx=20, fill="x")
 
-        self.lbl_template = ctk.CTkLabel(frame_template, text=translate("host.template_label"), font=("Helvetica", 14, "bold"))
+        self.lbl_template = ctk.CTkLabel(frame_template, text=translate("host.template_label"),
+                                         font=("Helvetica", 14, "bold"))
         self.lbl_template.pack(pady=(10, 2), padx=15, anchor="w")
 
         temp_select_frame = ctk.CTkFrame(frame_template, fg_color="transparent")
@@ -150,7 +178,8 @@ class HostView(ctk.CTkFrame):
 
         frame_file = ctk.CTkFrame(form_frame)
         frame_file.pack(pady=5, padx=20, fill="x")
-        self.lbl_mode = ctk.CTkLabel(frame_file, text=translate("host.folder_mode_label"), font=("Helvetica", 14, "bold"))
+        self.lbl_mode = ctk.CTkLabel(frame_file, text=translate("host.folder_mode_label"),
+                                     font=("Helvetica", 14, "bold"))
         self.lbl_mode.pack(pady=(10, 5))
 
         self.mode_var = ctk.StringVar(value=translate("host.mode_auto"))
@@ -163,7 +192,15 @@ class HostView(ctk.CTkFrame):
         )
         self.seg_button.pack(pady=5)
 
-        self.file_label = ctk.CTkLabel(frame_file, text=translate("host.loading"), text_color="gray", font=("Helvetica", 12))
+        # BUGFIX: anchor="center" anstelle von "c"
+        self.file_label = ctk.CTkLabel(
+            frame_file,
+            text=translate("host.loading").rstrip('.'),
+            text_color="gray",
+            font=("Helvetica", 12),
+            width=300,
+            anchor="center"
+        )
         self.file_label.pack(pady=(0, 10))
 
         self.btn_create = ctk.CTkButton(form_frame, text=translate("host.btn_create"), height=50, width=250,
@@ -245,13 +282,19 @@ class HostView(ctk.CTkFrame):
         self.game_state.match_folder_name = os.path.basename(self.selected_match_dir)
         self.game_state.local_drive_folder = self.selected_base_folder
         self.game_state.project_filename = "project.zip"
+        self.game_state.room_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+
+        self.btn_create.configure(state="disabled")
+        self.file_label.configure(anchor="w")
+
+        EventBus.emit("CMD_PREPARE_WORKSPACE", data={"base_folder": self.selected_base_folder})
+
+    def _on_workspace_ready(self, data):
+        self.game_state.workspace_id = data.get("workspace_id", "")
 
         self.game_state.players = [self.game_state.my_name]
         self.game_state.active_players = [self.game_state.my_name]
-
         self.game_state.set_player_time(self.game_state.my_name, self.game_state.start_time_minutes * 60)
         self.game_state.set_bonus_text(self.game_state.my_name, "")
 
-        self.game_state.room_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-
-        self.router.show_lobby()
+        self.after(0, self.router.show_lobby)

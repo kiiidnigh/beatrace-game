@@ -1,7 +1,7 @@
 [Setup]
 ; Grundlegende App-Informationen [cite: 1]
 AppName=Beatrace
-AppVersion=1.5.0
+AppVersion=1.5.1
 AppPublisher=kiiidnigh
 AppPublisherURL=https://github.com/kiiidnigh/beatrace-game
 SetupIconFile=assets\icon.ico
@@ -10,7 +10,7 @@ SetupIconFile=assets\icon.ico
 PrivilegesRequired=lowest
 DefaultDirName={autopf}\Beatrace
 OutputDir=.\installer
-OutputBaseFilename=Beatrace_Installer_v1.5.0
+OutputBaseFilename=Beatrace_Installer_v1.5.1
 
 ; Komprimierung [cite: 3]
 Compression=lzma2/max
