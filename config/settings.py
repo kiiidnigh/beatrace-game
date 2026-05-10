@@ -58,7 +58,7 @@ DRIVE_PROJECT_PATH = os.path.join(BASE_DIR, "test_projekt.zip")
 
 FL_STUDIO_PATH = find_fl_studio_path()
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 
 # --- TELEMETRY ---
 CURRENT_LOG_FILE = ""  # Wird zur Laufzeit von main.py gefüllt

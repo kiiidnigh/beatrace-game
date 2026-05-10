@@ -144,9 +144,11 @@
     },
     "updater": {
         "available_title": "Update verfügbar!",
-        "available_msg": "Eine neue Version von Beatrace ({version}) ist verfügbar.\n\nMöchtest du sie jetzt herunterladen und installieren?",
-        "loading_title": "Update läuft",
-        "loading_msg": "Lade Update herunter...\nDie App schließt sich gleich.",
+        "available_msg": "Eine neue Version von Beatrace ({version}) ist verfügbar.\n\nMöchtest du jetzt updaten? Der Vorgang ist vollautomatisch.",
+        "loading_title": "Beatrace wird aktualisiert",
+        "progress_connecting": "Verbinde mit Server...",
+        "progress_downloading": "Lade Update herunter...",
+        "progress_installing": "Installiere im Hintergrund & Neustart...",
         "error_title": "Update fehlgeschlagen",
         "error_msg": "Das Update konnte nicht heruntergeladen werden.\n{error}"
     },
