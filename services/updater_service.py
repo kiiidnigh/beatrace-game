@@ -11,7 +11,7 @@ import re
 import requests
 import customtkinter as ctk
 
-from config.settings import VERSION
+from config import settings
 from core.i18n import translate as t
 from utils.ui_utils import get_centered_geometry
 from ui.components.custom_popup import CustomPopup
@@ -23,11 +23,19 @@ GITHUB_REPO = "beatrace-game"
 class UpdaterService:
     def __init__(self, root_window):
         self.root = root_window
-        self.api_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
         self.loading_window = None
 
+        # Das Flag-File Pattern:
+        # Wenn eine DEV_UPDATE.flag im Basisordner liegt, nutze den lokalen Testserver.
+        flag_path = os.path.join(settings.BASE_DIR, "DEV_UPDATE.flag")
+        if os.path.exists(flag_path):
+            self.api_url = "http://127.0.0.1:8000/latest.json"
+            logging.info("[Updater] ⚠️ DEV_UPDATE.flag gefunden! Nutze lokalen Test-Server.")
+        else:
+            self.api_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
+
     def check_for_updates(self):
-        logging.info(f"[Updater] Prüfe auf Updates... Aktuelle Version: {VERSION}")
+        logging.info(f"[Updater] Prüfe auf Updates... Aktuelle Version: {settings.VERSION}")
         threading.Thread(target=self._check_logic, daemon=True).start()
 
     def _check_logic(self):
@@ -43,7 +51,7 @@ class UpdaterService:
             if not latest_version:
                 return
 
-            if self._is_newer_version(VERSION, latest_version):
+            if self._is_newer_version(settings.VERSION, latest_version):
                 logging.info(f"[Updater] Neue Version gefunden: {latest_version}")
 
                 download_url = None
@@ -59,12 +67,10 @@ class UpdaterService:
             logging.error(f"[Updater] Fehler bei der Update-Prüfung: {e}")
 
     def _is_newer_version(self, current_ver, latest_ver):
-        """Kugelsichere Versionsprüfung, auch wenn 'v1.4-beta' Strings verwendet werden."""
         try:
             curr = [int(x) for x in re.findall(r'\d+', current_ver)]
             latest = [int(x) for x in re.findall(r'\d+', latest_ver)]
 
-            # Längen angleichen (z.B. "1.4" vs "1.4.0")
             while len(curr) < len(latest): curr.append(0)
             while len(latest) < len(curr): latest.append(0)
 
@@ -142,25 +148,16 @@ class UpdaterService:
                         downloaded += len(chunk)
                         if total_size > 0:
                             progress = downloaded / total_size
-                            # Aktualisiere das UI nur, wenn es sich lohnt (spart CPU)
                             if int(progress * 100) % 2 == 0:
                                 self.root.after(0, lambda p=progress: self._update_ui(p))
 
             logging.info(f"[Updater] Installer erfolgreich heruntergeladen.")
             self.root.after(0, lambda: self._update_ui(1.0, t("updater.progress_installing")))
 
-            # === DER SILENT-HACK ===
-            # Wenn die App als .exe läuft, generieren wir ein Script, das die Installation
-            # durchführt, während Beatrace bereits komplett geschlossen ist.
             if getattr(sys, 'frozen', False):
                 exe_path = sys.executable
                 bat_path = os.path.join(temp_dir, "beatrace_auto_updater.bat")
 
-                # Das Batch-Skript:
-                # 1. Wartet 2 Sekunden, damit sich Beatrace.exe sicher schließen kann.
-                # 2. Führt den Installer komplett unsichtbar aus.
-                # 3. Startet die aktualisierte Beatrace.exe wieder.
-                # 4. Löscht sich selbst.
                 bat_content = f"""@echo off
 timeout /t 2 /nobreak > NUL
 "{installer_path}" /VERYSILENT /SUPPRESSMSGBOXES /FORCECLOSEAPPLICATIONS
@@ -170,13 +167,10 @@ del "%~f0"
                 with open(bat_path, "w", encoding="utf-8") as bat_file:
                     bat_file.write(bat_content)
 
-                # Skript versteckt (ohne Konsolenfenster) starten
                 subprocess.Popen([bat_path], creationflags=subprocess.CREATE_NO_WINDOW)
             else:
-                # Fallback für Entwicklungsmodus (nur starten, nicht überschreiben)
                 subprocess.Popen([installer_path])
 
-            # Suizid der App: Schließt alles sofort, damit InnoSetup die Dateien freigeben kann.
             os._exit(0)
 
         except Exception as e:
