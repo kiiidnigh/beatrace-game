@@ -25,7 +25,7 @@ class GameState:
         self.workspace_id = ""
 
         # NEU: Identity
-        self.my_identity = IdentityService.get_or_create_identity()
+        self.my_identity = IdentityService.get_or_create_id()
         self.my_public_id = IdentityService.get_public_id()
         self.online_friends = set()
 

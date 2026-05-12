@@ -71,20 +71,23 @@ class InviteModal(ctk.CTkToplevel):
 
     def send_invite(self, friend_pub_id, btn_widget):
         # 1. Unsere eigenen Daten holen
-        my_pub_id = IdentityService.get_public_id()
-        my_token = IdentityService.get_private_token()
+        my_identity = IdentityService.get_or_create_id()
+        my_name = IdentityService.get_display_name()
 
-        # 2. Das Paket schnüren (NEU: inkl. workspace_id!)
+        # 2. Das Paket schnüren (NEU: type = "lobby_invite")
         payload = json.dumps({
-            "sender_id": my_pub_id,
-            "token": my_token,
+            "type": "lobby_invite",
+            "sender_name": my_name,
+            "sender_identity": my_identity,
             "room_code": self.game_state.room_code,
-            "workspace_id": self.game_state.workspace_id  # <--- HIER! Die Signatur des aktuellen Basis-Ordners
+            "workspace_id": self.game_state.workspace_id
         })
 
-        # 3. Über unseren verbundenen Netzwerk-Client an den Briefkasten des Freundes senden
-        topic = f"beatrace/invites/{friend_pub_id}"
-        self.network.client.publish(topic, payload, qos=1)
+        # 3. Über den PRESENCE SERVICE in den neuen Briefkasten werfen
+        topic = f"beatrace/social/{friend_pub_id}/inbox"
+
+        # Wir greifen über master (MainWindow) auf den PresenceService zu
+        self.master.presence_service.client.publish(topic, payload, qos=1)
 
         # 4. Visuelles Feedback
         btn_widget.configure(text=translate("social.invite_sent"), fg_color="#1DB954", state="disabled")

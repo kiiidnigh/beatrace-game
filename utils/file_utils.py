@@ -215,3 +215,26 @@ def get_template_path(selected_path):
         return selected_path
 
     return appdata_template_path if os.path.exists(appdata_template_path) else ""
+
+# --- USER PROFILE (Eigene Identität & Name) ---
+def get_profile_path():
+    return os.path.join(settings.APPDATA_DIR, f"user_profile{_get_profile_suffix()}.json")
+
+def load_profile():
+    path = get_profile_path()
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_profile(profile_dict):
+    path = get_profile_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(profile_dict, f, indent=4)
+    except Exception as e:
+        print(f"Fehler beim Speichern des Profils: {e}")

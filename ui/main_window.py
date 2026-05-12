@@ -2,8 +2,8 @@
 # FILE: ui/main_window.py
 # ================================================
 import customtkinter as ctk
+import json
 
-from core.game_state import GameState
 from network.mqtt_client import NetworkManager
 from services.updater_service import UpdaterService
 from services.telemetry_service import TelemetryService
@@ -12,10 +12,12 @@ from services.handshake_service import HandshakeService
 from services.discord_service import DiscordService
 from services.presence_service import PresenceService
 from services.workspace_service import WorkspaceService
+from services.identity_service import IdentityService
 from utils.file_utils import load_prefs, save_prefs
 from utils.ui_utils import get_centered_geometry
 from core.event_bus import EventBus
 from core.i18n import translate
+from core.game_state import GameState
 from config.settings import VERSION
 
 from ui.views.home_view import HomeView
@@ -23,6 +25,7 @@ from ui.views.host_view import HostView
 from ui.views.join_view import JoinView
 from ui.views.lobby_view import LobbyView
 from ui.views.game_view import GameView
+from ui.views.setup_view import SetupView
 from ui.components.custom_popup import CustomPopup
 
 
@@ -53,11 +56,19 @@ class MainWindow(ctk.CTk):
         self.handshake_service = HandshakeService()
         self.discord_service = DiscordService()
 
-        # NEU: Start des Social Netzwerks
+        # Start des Social Netzwerks
         self.presence_service = PresenceService()
         self.presence_service.start()
 
-        self.show_home()
+        # --- NEU: Routing Logik für First-Time Setup ---
+        saved_name = IdentityService.get_display_name()
+        if not saved_name:
+            # Erster Start: Profil existiert noch nicht
+            self.show_setup()
+        else:
+            # Wiederkehrender Spieler: Direkt Name laden und ab ins Hauptmenü
+            self.game_state.my_name = saved_name
+            self.show_home()
 
         self.updater = UpdaterService(self)
         self.after(1000, self.updater.check_for_updates)
@@ -68,10 +79,49 @@ class MainWindow(ctk.CTk):
         EventBus.subscribe("SYS_FL_MANUAL_START_BLOCKED", lambda d: self.after(0, self.show_manual_start_warning))
         EventBus.subscribe("LANGUAGE_CHANGED", lambda d: self.after(0, self._on_language_changed))
 
-        # NEU: Social Events abfangen
-        EventBus.subscribe("SOCIAL_FRIEND_STATUS", lambda d: self.after(0, lambda: self.game_state.set_friend_online(
-            d["public_id"], d["status"] == "online")))
+        # Social Events abfangen
+        EventBus.subscribe("SOCIAL_FRIEND_STATUS", lambda d: self.after(0, lambda: self.game_state.set_friend_online(d["public_id"], d["status"] == "online")))
         EventBus.subscribe("SOCIAL_INVITE_RECEIVED", lambda d: self.after(0, lambda: self._show_invite_popup(d)))
+        EventBus.subscribe("SOCIAL_FRIEND_REQUEST_RECEIVED", lambda d: self.after(0, lambda: self._show_friend_request_popup(d)))
+
+    def _show_friend_request_popup(self, data):
+        sender_name = data.get("sender_name", "Unbekannt")
+        sender_identity = data.get("sender_identity", "")
+
+        if not sender_identity:
+            return
+
+        def accept():
+            # 1. Lokal als Freund speichern
+            from services.friend_service import FriendService
+            FriendService.add_friend(sender_name, sender_identity)
+
+            # 2. Dem anderen antworten: "Angenommen!"
+            my_identity = IdentityService.get_or_create_id()
+            my_name = IdentityService.get_display_name()
+
+            payload = json.dumps({
+                "type": "friend_accept",
+                "sender_name": my_name,
+                "sender_identity": my_identity
+            })
+            target_pub_id = sender_identity.split("#")[0]
+            self.presence_service.client.publish(f"beatrace/social/{target_pub_id}/inbox", payload, qos=1)
+
+        msg = f"{sender_name} möchte dich als Freund hinzufügen!"
+
+        CustomPopup(
+            master=self,
+            title="Neue Freundschaftsanfrage",
+            message=msg,
+            icon="🤝",
+            btn_color="#1DB954",
+            sound_type="info",
+            show_cancel=True,
+            confirm_text="Annehmen",
+            cancel_text="Ablehnen",
+            on_confirm_callback=accept
+        )
 
     def _show_invite_popup(self, data):
         if self.network.is_connected:
@@ -149,7 +199,7 @@ class MainWindow(ctk.CTk):
                                                                                                       padx=5)
                 return
 
-                # 3. Wenn der Name schon da war, direkt weiter
+            # 3. Wenn der Name schon da war, direkt weiter
             _proceed_to_join()
 
         # UI für die ursprüngliche Einladung aufbauen
@@ -328,6 +378,10 @@ class MainWindow(ctk.CTk):
             self.current_view.destroy()
         self.current_view = view_class(self, self.game_state, self.network, **kwargs)
         self.current_view.pack(fill="both", expand=True)
+
+    def show_setup(self):
+        self.system_monitor.set_state("WAITING_FOR_CLOSE")
+        self.switch_view(SetupView, router=self)
 
     def show_home(self):
         self.system_monitor.set_state("WAITING_FOR_CLOSE")
