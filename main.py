@@ -3,6 +3,13 @@
 # ================================================
 import os
 import sys
+
+if "--profile" in sys.argv:
+    idx = sys.argv.index("--profile")
+    profile_name = sys.argv[idx + 1]
+    os.environ["BEATRACE_PROFILE"] = profile_name
+    print(f"🛠️ [DEV MODE] Isoliertes Profil geladen: {profile_name}")
+
 import logging
 from datetime import datetime
 from config import settings

@@ -17,7 +17,7 @@ class JoinView(ctk.CTkFrame):
         self.network = network
         self.router = router
 
-        self.prefs_file = os.path.join(settings.BASE_DIR, "host_prefs.json")
+        self.prefs_file = os.path.join(settings.BASE_DIR, "settings.json")
         self.prefs = load_prefs()
         self.selected_folder = self.prefs.get("last_join_folder", "")
 
@@ -65,14 +65,21 @@ class JoinView(ctk.CTkFrame):
 
         self.lbl_code = ctk.CTkLabel(form_frame, text=translate("join.code_label"), font=("Helvetica", 14))
         self.lbl_code.pack(pady=5)
+
         self.code_entry = ctk.CTkEntry(form_frame, width=200, height=50, font=("Helvetica", 28, "bold"),
                                        justify="center")
+
+        # ONE-CLICK JOIN: Füllt den Code automatisch aus, falls er über eine Einladung im State gelandet ist
+        if self.game_state.room_code:
+            self.code_entry.insert(0, self.game_state.room_code)
+
         self.code_entry.pack(pady=(0, 20))
 
         frame_folder = ctk.CTkFrame(form_frame)
         frame_folder.pack(pady=10, fill="x")
 
-        self.lbl_folder = ctk.CTkLabel(frame_folder, text=translate("join.folder_label"), font=("Helvetica", 14, "bold"))
+        self.lbl_folder = ctk.CTkLabel(frame_folder, text=translate("join.folder_label"),
+                                       font=("Helvetica", 14, "bold"))
         self.lbl_folder.pack(pady=(15, 5))
 
         self.lbl_folder_sub = ctk.CTkLabel(frame_folder, text=translate("join.folder_sub_label"), text_color="gray",

@@ -8,17 +8,94 @@ import hashlib
 import subprocess
 import shutil
 import uuid
-from config.settings import APPDATA_DIR
+from config import settings
 
 # Pfade
-SETTINGS_FILE = os.path.join(APPDATA_DIR, "settings.json")
-OBS_BASE_DIR = os.path.join(APPDATA_DIR, "output", "obs")
+OBS_BASE_DIR = os.path.join(settings.APPDATA_DIR, "output", "obs")
 FL_USER_TEMPLATES_DIR = os.path.expanduser(r"~\Documents\Image-Line\FL Studio\Projects\Templates")
 
 
+def _get_profile_suffix():
+    """Hilfsfunktion: Holt das Dev-Profil (z.B. '_tester'), falls vorhanden."""
+    profile = os.environ.get("BEATRACE_PROFILE", "")
+    return f"_{profile}" if profile else ""
+
+# --- SETTINGS (App-Konfiguration) ---
+def get_prefs_path():
+    # Speichert z.B. unter %AppData%\Beatrace\settings_tester.json
+    return os.path.join(settings.APPDATA_DIR, f"settings{_get_profile_suffix()}.json")
+
+def load_prefs():
+    path = get_prefs_path()
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_prefs(prefs_dict):
+    path = get_prefs_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(prefs_dict, f, indent=4)
+    except Exception as e:
+        print(f"Fehler beim Speichern der Settings: {e}")
+
+# --- SOCIAL (Identität & Freunde) ---
+def get_social_path():
+    return os.path.join(settings.APPDATA_DIR, f"social{_get_profile_suffix()}.json")
+
+def load_social():
+    path = get_social_path()
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_social(social_dict):
+    path = get_social_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(social_dict, f, indent=4)
+    except Exception as e:
+        print(f"Fehler beim Speichern der Social-Daten: {e}")
+
+# --- WORKSPACES (Cloud Basis-Ordner Historie) ---
+def get_workspaces_path():
+    return os.path.join(settings.APPDATA_DIR, f"workspaces{_get_profile_suffix()}.json")
+
+def load_workspaces():
+    path = get_workspaces_path()
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_workspaces(workspaces_dict):
+    path = get_workspaces_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(workspaces_dict, f, indent=4)
+    except Exception as e:
+        print(f"Fehler beim Speichern der Workspaces: {e}")
+
+
+# --- FL STUDIO & MATCH LOGIK ---
+
 def get_or_create_workspace_id(base_folder):
     """
-    NEU: Liest oder erstellt die eindeutige Signatur des Cloud-Ordners.
+    Liest oder erstellt die eindeutige Signatur des Cloud-Ordners.
     Das macht den Sync-Handshake instantan!
     """
     if not base_folder or not os.path.exists(base_folder):
@@ -69,25 +146,6 @@ def _create_fl_studio_shortcut(shortcut_path):
             os.remove(vbs_path)
 
 
-def load_prefs():
-    if os.path.exists(SETTINGS_FILE):
-        try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-
-def save_prefs(prefs):
-    os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
-    try:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(prefs, f, indent=4, ensure_ascii=False)
-    except Exception as e:
-        print(f"Fehler beim Speichern der Settings: {e}")
-
-
 def get_obs_path(player_name):
     os.makedirs(OBS_BASE_DIR, exist_ok=True)
     return os.path.join(OBS_BASE_DIR, f"obs_timer_{player_name}.txt")
@@ -107,7 +165,7 @@ def calculate_md5(fname):
 
 
 def open_template_folder():
-    template_dir = os.path.join(APPDATA_DIR, "templates", "flstudio")
+    template_dir = os.path.join(settings.APPDATA_DIR, "templates", "flstudio")
     os.makedirs(template_dir, exist_ok=True)
     os.startfile(template_dir)
 
@@ -115,7 +173,7 @@ def open_template_folder():
 def get_available_templates():
     template_map = {}
 
-    appdata_dir = os.path.join(APPDATA_DIR, "templates", "flstudio")
+    appdata_dir = os.path.join(settings.APPDATA_DIR, "templates", "flstudio")
     if not os.path.exists(appdata_dir):
         get_template_path("")
 
@@ -135,7 +193,7 @@ def get_available_templates():
 
 
 def get_template_path(selected_path):
-    template_dir = os.path.join(APPDATA_DIR, "templates", "flstudio")
+    template_dir = os.path.join(settings.APPDATA_DIR, "templates", "flstudio")
     appdata_template_path = os.path.join(template_dir, "default.flp")
 
     os.makedirs(template_dir, exist_ok=True)

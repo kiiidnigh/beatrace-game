@@ -4,6 +4,7 @@
 import customtkinter as ctk
 from utils.file_utils import load_prefs, save_prefs
 from ui.components.settings_modal import SettingsModal
+from ui.components.friends_modal import FriendsModal
 from core.i18n import translate
 from core.event_bus import EventBus
 
@@ -14,43 +15,39 @@ class HomeView(ctk.CTkFrame):
         self.game_state = game_state
         self.router = router
 
-        # Einstellungen laden und Nutzernamen wiederherstellen
         prefs = load_prefs()
         self.game_state.my_name = prefs.get("last_username", "")
-
-        # FIX: Sicheres Zurücksetzen aller Match-Daten über den Manager
         self.game_state.reset_match_data()
 
         self.setup_ui()
-
-        # Auf On-The-Fly Sprachwechsel hören
         EventBus.subscribe("LANGUAGE_CHANGED", self._on_language_changed)
 
     def destroy(self):
-        """Cleanup, um Event-Leaks bei View-Wechseln zu vermeiden."""
         EventBus.unsubscribe("LANGUAGE_CHANGED", self._on_language_changed)
-        # Standard ctk Workaround
         self.pack_forget()
         self.after(100, lambda: ctk.CTkFrame.destroy(self))
 
     def _on_language_changed(self, data=None):
-        """Wird aufgerufen, wenn in den Settings eine neue Sprache gespeichert wird."""
         self.after(0, self.update_texts)
 
     def update_texts(self):
-        """Aktualisiert alle sichtbaren Texte dynamisch aus der Translator JSON."""
+        self.btn_friends.configure(text=translate("home.btn_friends"))
         self.btn_settings.configure(text=translate("home.btn_settings"))
         self.lbl_title.configure(text=translate("home.title"))
         self.lbl_player_name.configure(text=translate("home.player_name_label"))
         self.btn_host.configure(text=translate("home.btn_host"))
         self.btn_join.configure(text=translate("home.btn_join"))
-
-        # Fehler-Text bei Sprachwechsel leeren, damit er nicht in der falschen Sprache hängen bleibt
+        self.lbl_my_id.configure(text=f"{translate('home.friend_code_badge')} {self.game_state.my_identity}")
         self.error_label.configure(text="")
 
     def setup_ui(self):
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
         top_frame.pack(fill="x", padx=20, pady=10)
+
+        self.btn_friends = ctk.CTkButton(top_frame, text=translate("home.btn_friends"), width=120, height=35,
+                                         font=("Helvetica", 14, "bold"),
+                                         fg_color="#3a7ebf", hover_color="#1f538d", command=self.open_friends)
+        self.btn_friends.pack(side="left")
 
         self.btn_settings = ctk.CTkButton(top_frame, text=translate("home.btn_settings"), width=120, height=35,
                                           font=("Helvetica", 14),
@@ -64,11 +61,11 @@ class HomeView(ctk.CTkFrame):
                                       text_color="#1DB954")
         self.lbl_title.pack(pady=(0, 10))
 
-        self.lbl_player_name = ctk.CTkLabel(center_frame, text=translate("home.player_name_label"), font=("Helvetica", 16))
+        self.lbl_player_name = ctk.CTkLabel(center_frame, text=translate("home.player_name_label"),
+                                            font=("Helvetica", 16))
         self.lbl_player_name.pack(pady=(0, 5))
 
         self.name_entry = ctk.CTkEntry(center_frame, width=300, height=50, font=("Helvetica", 18), justify="center")
-
         if self.game_state.my_name:
             self.name_entry.insert(0, self.game_state.my_name)
         self.name_entry.pack(pady=10)
@@ -89,8 +86,32 @@ class HomeView(ctk.CTkFrame):
         self.error_label = ctk.CTkLabel(center_frame, text="", text_color="red", font=("Helvetica", 14))
         self.error_label.pack()
 
+        self.identity_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.identity_frame.pack(side="bottom", pady=20)
+
+        id_display = f"{translate('home.friend_code_badge')} {self.game_state.my_identity}"
+        self.lbl_my_id = ctk.CTkLabel(self.identity_frame, text=id_display, font=("Courier", 12, "bold"),
+                                      text_color="gray")
+        self.lbl_my_id.pack(side="left", padx=10)
+
+        self.btn_copy_id = ctk.CTkButton(
+            self.identity_frame, text="📋", width=30, height=24,
+            fg_color="#2D3436", hover_color="#636E72", command=self._copy_my_id
+        )
+        self.btn_copy_id.pack(side="left")
+
+    def _copy_my_id(self):
+        self.clipboard_clear()
+        self.clipboard_append(self.game_state.my_identity)
+        self.update()
+        self.btn_copy_id.configure(text="✔", fg_color="#1DB954", hover_color="#14833b")
+        self.after(2000, lambda: self.btn_copy_id.configure(text="📋", fg_color="#2D3436", hover_color="#636E72"))
+
     def open_settings(self):
         SettingsModal(self.winfo_toplevel())
+
+    def open_friends(self):
+        FriendsModal(self.winfo_toplevel(), self.game_state)
 
     def _save_username(self):
         name = self.name_entry.get().strip()

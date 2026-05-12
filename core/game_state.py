@@ -2,6 +2,7 @@
 # FILE: core/game_state.py
 # ================================================
 import os
+from services.identity_service import IdentityService
 
 
 class GameState:
@@ -23,6 +24,11 @@ class GameState:
 
         self.workspace_id = ""
 
+        # NEU: Identity
+        self.my_identity = IdentityService.get_or_create_identity()
+        self.my_public_id = IdentityService.get_public_id()
+        self.online_friends = set()
+
         self._times = {}
         self._bonus_texts = {}
 
@@ -32,6 +38,12 @@ class GameState:
         self.verified_players = set()
 
         self.match_stats = {}
+
+    def set_friend_online(self, public_id, is_online):
+        if is_online:
+            self.online_friends.add(public_id)
+        else:
+            self.online_friends.discard(public_id)
 
     def reset_match_data(self):
         self.players.clear()
@@ -85,8 +97,6 @@ class GameState:
         self.match_folder_name = data.get("match_folder_name", "")
         self.project_filename = data.get("project_filename", "project.zip")
         self.workspace_id = data.get("workspace_id", "")
-
-        # FIX 2: Die verifizierten Spieler werden jetzt synchronisiert!
         self.verified_players = set(data.get("verified_players", []))
 
         for player in self.players:
@@ -103,7 +113,6 @@ class GameState:
             "match_folder_name": self.match_folder_name,
             "project_filename": self.project_filename,
             "workspace_id": self.workspace_id,
-            # FIX 2: Exportiere das Set als JSON-kompatible Liste
             "verified_players": list(self.verified_players)
         }
 

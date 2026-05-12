@@ -6,6 +6,7 @@ from utils.ui_utils import TextAnimator, CountdownTimer
 from core.event_bus import EventBus
 from core.i18n import translate
 from ui.components.custom_popup import CustomPopup
+from ui.components.invite_modal import InviteModal
 
 
 class LobbyView(ctk.CTkFrame):
@@ -19,7 +20,6 @@ class LobbyView(ctk.CTkFrame):
         self._is_destroyed = False
         self._current_dots = ""
 
-        # NEU: Der State-Tracker für die Join-Phasen ("connecting", "waiting_host", "synced")
         self._join_state = "connecting" if not self.game_state.is_host else "synced"
 
         self.animator = TextAnimator(self)
@@ -60,6 +60,7 @@ class LobbyView(ctk.CTkFrame):
 
         if self.game_state.is_host:
             self.btn_start.configure(text=translate("lobby.btn_start"))
+            self.btn_invite.configure(text=translate("lobby.btn_invite"))
             self.btn_close.configure(text=translate("lobby.btn_close"))
             self.update_settings_ui()
         else:
@@ -102,13 +103,10 @@ class LobbyView(ctk.CTkFrame):
 
     def _on_animate_tick(self, dots):
         self._current_dots = dots
-
-        # 1. Einstellungen-Label animieren
         if self.lbl_settings.cget("text_color") == "gray":
             base = translate("lobby.loading_settings").rstrip('.')
             self.lbl_settings.configure(text=f"{base}{dots}")
 
-        # 2. Broker-Verbindung animieren (Ohne Code-Duplizierung!)
         if getattr(self, "_join_state", "") == "connecting":
             self.lbl_wait.configure(text=f"Verbinde mit Broker{dots}")
 
@@ -169,26 +167,33 @@ class LobbyView(ctk.CTkFrame):
             btn_center = ctk.CTkFrame(self.action_frame, fg_color="transparent")
             btn_center.pack(expand=True)
 
-            self.btn_start = ctk.CTkButton(btn_center, text=translate("lobby.btn_start"), height=50, width=220,
+            self.btn_start = ctk.CTkButton(btn_center, text=translate("lobby.btn_start"), height=50, width=170,
                                            font=("Helvetica", 16, "bold"),
                                            fg_color="#1DB954", hover_color="#14833b", command=self.host_start_game)
-            self.btn_start.pack(side="left", padx=10)
+            self.btn_start.pack(side="left", padx=5)
 
-            self.btn_close = ctk.CTkButton(btn_center, text=translate("lobby.btn_close"), height=50, width=220,
+            # NEU: Der Einladen-Button in der Mitte!
+            self.btn_invite = ctk.CTkButton(btn_center, text=translate("lobby.btn_invite"), height=50, width=140,
+                                            font=("Helvetica", 16, "bold"),
+                                            fg_color="#3a7ebf", hover_color="#1f538d", command=self.open_invite_modal)
+            self.btn_invite.pack(side="left", padx=5)
+
+            self.btn_close = ctk.CTkButton(btn_center, text=translate("lobby.btn_close"), height=50, width=170,
                                            font=("Helvetica", 16, "bold"),
                                            fg_color="#c0392b", hover_color="#e74c3c", command=self.close_lobby)
-            self.btn_close.pack(side="left", padx=10)
+            self.btn_close.pack(side="left", padx=5)
         else:
-            # Zeigt initial den Text, der sofort vom Animator gepackt wird
             self.lbl_wait = ctk.CTkLabel(self.action_frame, text="Verbinde mit Broker...",
                                          font=("Helvetica", 16, "bold"), text_color="orange")
             self.lbl_wait.pack(pady=(0, 15))
 
-            # Erlaubt direkt den "Abbrechen" Button, falls der Broker down ist
             self.btn_leave = ctk.CTkButton(self.action_frame, text=translate("common.btn_cancel"), height=50, width=250,
                                            font=("Helvetica", 16, "bold"),
                                            fg_color="#c0392b", hover_color="#e74c3c", command=self._cancel_join)
             self.btn_leave.pack(expand=True)
+
+    def open_invite_modal(self):
+        InviteModal(self.winfo_toplevel(), self.game_state, self.network)
 
     def copy_code(self):
         self.clipboard_clear()
@@ -238,14 +243,7 @@ class LobbyView(ctk.CTkFrame):
             dist=dist,
             project=self.game_state.project_filename
         )
-
-        self.lbl_settings.configure(
-            text=formatted,
-            text_color="white",
-            width=0,
-            anchor="center",
-            justify="center"
-        )
+        self.lbl_settings.configure(text=formatted, text_color="white", width=0, anchor="center", justify="center")
 
     def update_player_list(self):
         current_players = self.game_state.players
@@ -288,38 +286,24 @@ class LobbyView(ctk.CTkFrame):
         self.network.disconnect()
         self.game_state.reset_match_data()
 
-        def on_close():
-            self.router.show_join()
+        def on_close(): self.router.show_join()
 
-        CustomPopup(
-            master=self.winfo_toplevel(),
-            title=translate("common.error"),
-            message="Raum nicht gefunden!\nDer eingegebene Code existiert nicht, das Internet ist langsam oder das Spiel wurde bereits beendet.",
-            icon="❌",
-            btn_color="#c0392b",
-            sound_type="error",
-            on_confirm_callback=on_close,
-            on_cancel_callback=on_close
-        )
+        CustomPopup(master=self.winfo_toplevel(), title=translate("common.error"),
+                    message="Raum nicht gefunden!\nDer Code existiert nicht oder das Spiel wurde bereits beendet.",
+                    icon="❌", btn_color="#c0392b", sound_type="error",
+                    on_confirm_callback=on_close, on_cancel_callback=on_close)
 
     def _on_handshake_timeout(self):
         self.network.send_signal("CLIENT_LEAVE")
         self.network.disconnect()
         self.game_state.reset_match_data()
 
-        def on_close():
-            self.router.show_join()
+        def on_close(): self.router.show_join()
 
-        CustomPopup(
-            master=self.winfo_toplevel(),
-            title=translate("common.error"),
-            message="Sync Timeout!\nDer ausgewählte Ordner passt nicht zum Host.\nHast du den richtigen Cloud-Ordner ausgewählt?",
-            icon="❌",
-            btn_color="#c0392b",
-            sound_type="error",
-            on_confirm_callback=on_close,
-            on_cancel_callback=on_close
-        )
+        CustomPopup(master=self.winfo_toplevel(), title=translate("common.error"),
+                    message="Sync Timeout!\nDer ausgewählte Ordner passt nicht zum Host.",
+                    icon="❌", btn_color="#c0392b", sound_type="error",
+                    on_confirm_callback=on_close, on_cancel_callback=on_close)
 
     def _apply_folder_verified(self, payload):
         sender = payload.get("sender")
@@ -331,43 +315,25 @@ class LobbyView(ctk.CTkFrame):
         self.network.disconnect()
         self.game_state.reset_match_data()
 
-        def on_close():
-            self.router.show_home()
+        def on_close(): self.router.show_home()
 
-        CustomPopup(
-            master=self.winfo_toplevel(),
-            title=translate("common.error"),
-            message=translate("lobby.err_name_taken"),
-            icon="❌",
-            btn_color="#c0392b",
-            sound_type="error",
-            on_confirm_callback=on_close,
-            on_cancel_callback=on_close
-        )
+        CustomPopup(master=self.winfo_toplevel(), title=translate("common.error"),
+                    message=translate("lobby.err_name_taken"), icon="❌", btn_color="#c0392b", sound_type="error",
+                    on_confirm_callback=on_close, on_cancel_callback=on_close)
 
     def _handle_lobby_closed(self):
         self.network.disconnect()
         self.game_state.reset_match_data()
 
-        def on_close():
-            self.router.show_home()
+        def on_close(): self.router.show_home()
 
-        CustomPopup(
-            master=self.winfo_toplevel(),
-            title=translate("lobby.closed_title"),
-            message=translate("lobby.closed_msg"),
-            icon="ℹ️",
-            btn_color="#3a7ebf",
-            sound_type="info",
-            on_confirm_callback=on_close,
-            on_cancel_callback=on_close
-        )
+        CustomPopup(master=self.winfo_toplevel(), title=translate("lobby.closed_title"),
+                    message=translate("lobby.closed_msg"), icon="ℹ️", btn_color="#3a7ebf", sound_type="info",
+                    on_confirm_callback=on_close, on_cancel_callback=on_close)
 
     def _apply_connected(self):
         if not self.game_state.is_host:
             self.network.send_signal("CLIENT_JOIN")
-
-            # Phase 2: Broker-Verbindung steht. Status wechseln und Timer starten!
             self._join_state = "waiting_host"
             self.join_timer = CountdownTimer(self, 12, self._on_join_tick, self._on_join_timeout)
             self.join_timer.start()
@@ -399,9 +365,7 @@ class LobbyView(ctk.CTkFrame):
 
         data = payload.get("data", {})
         if not self.game_state.is_host:
-            # Phase 3: Host hat geantwortet, wir sind synchronisiert!
             self._join_state = "synced"
-
             self.game_state.load_sync_data(data)
             self.game_state.ready_players = set(self.game_state.players)
 

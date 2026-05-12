@@ -61,5 +61,6 @@ FL_STUDIO_PATH = find_fl_studio_path()
 VERSION = "1.5.1"
 
 # --- TELEMETRY ---
+DISCORD_APP_ID = "1503158856228802560"
 CURRENT_LOG_FILE = ""  # Wird zur Laufzeit von main.py gefüllt
 TELEMETRY_URL = "https://discord.com/api/webhooks/1501934166080487597/NLo5R-7pdmL_BXBP3yyu3-XdmJW1JrE9HaZjn0iLmatIz7LIXQjx0ojTDAjaE_hklNt0"

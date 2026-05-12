@@ -1,3 +1,4 @@
+
 {
     "common": {
         "btn_back": "◀ Zurück",
@@ -14,9 +15,31 @@
         "title": "BEATRACE",
         "player_name_label": "Dein Spielername:",
         "btn_settings": "⚙️ Einstellungen",
+        "btn_friends": "👥 Freunde",
         "btn_host": "SPIEL ERSTELLEN",
         "btn_join": "SPIEL BEITRETEN",
+        "friend_code_badge": "DEIN FREUNDES-CODE:",
         "error_no_name": "Bitte gib einen Namen ein!"
+    },
+    "social": {
+        "friends_title": "Freundesliste",
+        "add_friend_section": "Freund hinzufügen",
+        "name_placeholder": "Name (z.B. Max)",
+        "code_placeholder": "Code (XYZ#123)",
+        "no_friends": "Keine Freunde hinzugefügt.",
+        "invite_popup_title": "Neue Einladung!",
+        "invite_popup_msg": "{player} hat dich zu einem Match eingeladen!\nCode: {code}",
+        "btn_accept": "Beitreten",
+        "btn_ignore": "Ignorieren",
+        "status_online": "Online",
+        "status_offline": "Offline",
+        "invite_friends_title": "Freunde einladen",
+        "btn_send_invite": "Einladen",
+        "invite_sent": "Gesendet!",
+        "invite_auto_join": "Du hast den Cloud-Ordner für dieses Projekt bereits verknüpft.\nKlicke auf Beitreten, um direkt in die Lobby zu springen!",
+        "invite_manual_join": "Das ist ein neues Projekt für dich.\nBitte klicke auf Beitreten, um deinen lokalen Speicherort für diesen Cloud-Ordner auszuwählen.",
+        "invite_name_title": "Name fehlt",
+        "invite_name_prompt": "Bitte gib deinen Spielernamen ein:"
     },
     "host": {
         "title": "Spiel konfigurieren",
@@ -62,7 +85,8 @@
         "err_name_taken": "Dieser Name ist in der Lobby bereits vergeben. Bitte wähle einen anderen.",
         "closed_title": "Lobby geschlossen",
         "closed_msg": "Der Host hat die Lobby geschlossen.",
-        "host_suffix": "(Host)"
+        "host_suffix": "(Host)",
+        "btn_invite": "EINLADEN"
     },
     "game": {
         "title": "Beatrace läuft!",

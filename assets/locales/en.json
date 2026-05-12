@@ -1,3 +1,4 @@
+
 {
     "common": {
         "btn_back": "◀ Back",
@@ -14,9 +15,31 @@
         "title": "BEATRACE",
         "player_name_label": "Your Player Name:",
         "btn_settings": "⚙️ Settings",
+        "btn_friends": "👥 Friends",
         "btn_host": "CREATE GAME",
         "btn_join": "JOIN GAME",
+        "friend_code_badge": "YOUR FRIEND CODE:",
         "error_no_name": "Please enter a name!"
+    },
+    "social": {
+        "friends_title": "Friends List",
+        "add_friend_section": "Add Friend",
+        "name_placeholder": "Name (e.g. Max)",
+        "code_placeholder": "Code (XYZ#123)",
+        "no_friends": "No friends added yet.",
+        "invite_popup_title": "New Invite!",
+        "invite_popup_msg": "{player} has invited you to a match!\nCode: {code}",
+        "btn_accept": "Join",
+        "btn_ignore": "Ignore",
+        "status_online": "Online",
+        "status_offline": "Offline",
+        "invite_friends_title": "Invite Friends",
+        "btn_send_invite": "Invite",
+        "invite_sent": "Sent!",
+        "invite_auto_join": "You have already linked the Cloud folder for this project.\nClick Join to jump straight into the lobby!",
+        "invite_manual_join": "This is a new project for you.\nPlease click Join to select your local save location for this Cloud folder.",
+        "invite_name_title": "Name Missing",
+        "invite_name_prompt": "Please enter your player name:"
     },
     "host": {
         "title": "Configure Game",
@@ -62,7 +85,8 @@
         "err_name_taken": "This name is already taken in the lobby. Please choose another one.",
         "closed_title": "Lobby Closed",
         "closed_msg": "The host has closed the lobby.",
-        "host_suffix": "(Host)"
+        "host_suffix": "(Host)",
+        "btn_invite": "INVITE"
     },
     "game": {
         "title": "Beatrace is running!",
@@ -119,7 +143,7 @@
         "player_finished_downloading": "{player} is done. Downloading project...",
         "download_timeout": "Download Timeout! Starting anyway...",
         "auto_saving": "Hands off! Auto-saving...",
-        "auto_save_warning": "Auto-Save!",
+        "auto_save_warning": "Auto-save!",
         "player_is_saving": "{player} is saving..."
     },
     "bug_report": {
@@ -144,7 +168,7 @@
     },
     "updater": {
         "available_title": "Update available!",
-        "available_msg": "A new version of Beatrace ({version}) is available.\n\nDo you want to update now? The process is fully automatic.",
+        "available_msg": "A new version of Beatrace ({version}) is available.\n\n Do you want to update now? The process is fully automatic.",
         "loading_title": "Updating Beatrace",
         "progress_connecting": "Connecting to server...",
         "progress_downloading": "Downloading update...",

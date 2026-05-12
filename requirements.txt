@@ -1,3 +1,6 @@
+# ================================================
+# FILE: requirements.txt
+# ================================================
 # --- UI & System ---
 customtkinter
 psutil
@@ -9,6 +12,8 @@ requests
 
 # --- Audio & Media ---
 pygame-ce
+pypresence
 
 # --- Lokale Submodule ---
--e ./libs/pyflp
+# Entferne das './' am Anfang, damit pip den Ordner relativ zum Projekt-Root sucht
+-e libs/pyflp

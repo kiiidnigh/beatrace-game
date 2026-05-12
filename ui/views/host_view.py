@@ -21,7 +21,7 @@ class HostView(ctk.CTkFrame):
         self.network = network
         self.router = router
 
-        self.prefs_file = os.path.join(settings.BASE_DIR, "host_prefs.json")
+        self.prefs_file = os.path.join(settings.BASE_DIR, "settings.json")
         self.prefs = load_prefs()
 
         self.selected_base_folder = self.prefs.get("last_folder", "")
