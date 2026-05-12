@@ -192,7 +192,6 @@ class HostView(ctk.CTkFrame):
         )
         self.seg_button.pack(pady=5)
 
-        # BUGFIX: anchor="center" anstelle von "c"
         self.file_label = ctk.CTkLabel(
             frame_file,
             text=translate("host.loading").rstrip('.'),
@@ -296,5 +295,10 @@ class HostView(ctk.CTkFrame):
         self.game_state.active_players = [self.game_state.my_name]
         self.game_state.set_player_time(self.game_state.my_name, self.game_state.start_time_minutes * 60)
         self.game_state.set_bonus_text(self.game_state.my_name, "")
+
+        # FIX: Host registriert sich selbst bei der Initiierung der Lobby!
+        self.game_state.verified_players.add(self.game_state.my_name)
+        # FIX 2: Der Host ist beim Start natürlich immer bereit, damit er direkt einen grünen Namen bekommt.
+        self.game_state.ready_players.add(self.game_state.my_name)
 
         self.after(0, self.router.show_lobby)

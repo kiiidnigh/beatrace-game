@@ -7,6 +7,7 @@ import threading
 import logging
 from core.event_bus import EventBus
 from utils.file_utils import get_or_create_workspace_id
+from services.workspace_service import WorkspaceService
 
 
 class HandshakeService:
@@ -42,6 +43,10 @@ class HandshakeService:
                 if not wid:
                     EventBus.emit("SYS_HANDSHAKE_ERROR", data={"error": "Konnte Workspace ID nicht erstellen/lesen."})
                     return
+
+                # FIX: Nur noch den Ordner in der JSON speichern!
+                WorkspaceService.add_known_folder(base_folder)
+
                 logging.info(f"[HandshakeService] Workspace ID generiert/geladen: {wid}")
                 EventBus.emit("SYS_WORKSPACE_READY", data={"workspace_id": wid})
             except Exception as e:
@@ -78,6 +83,10 @@ class HandshakeService:
                             local_id = f.read().strip()
                             if local_id == expected_id:
                                 logging.info("[HandshakeService] Ordner blitzschnell verifiziert!")
+
+                                # FIX: Auch der Client speichert nur noch den Ordnerpfad!
+                                WorkspaceService.add_known_folder(base_folder)
+
                                 EventBus.emit("SYS_HANDSHAKE_SUCCESS")
                                 self._is_checking = False
                                 return

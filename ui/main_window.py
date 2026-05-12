@@ -13,6 +13,7 @@ from services.discord_service import DiscordService
 from services.presence_service import PresenceService
 from services.workspace_service import WorkspaceService
 from services.identity_service import IdentityService
+from services.lobby_service import LobbyService  # <--- NEU IMPORTIERT
 from utils.file_utils import load_prefs, save_prefs
 from utils.ui_utils import get_centered_geometry
 from core.event_bus import EventBus
@@ -56,11 +57,14 @@ class MainWindow(ctk.CTk):
         self.handshake_service = HandshakeService()
         self.discord_service = DiscordService()
 
+        # --- NEU: Lobby Service initialisieren ---
+        self.lobby_service = LobbyService(self.game_state, self.network)
+
         # Start des Social Netzwerks
         self.presence_service = PresenceService()
         self.presence_service.start()
 
-        # --- NEU: Routing Logik für First-Time Setup ---
+        # --- Routing Logik für First-Time Setup ---
         saved_name = IdentityService.get_display_name()
         if not saved_name:
             # Erster Start: Profil existiert noch nicht
@@ -80,9 +84,34 @@ class MainWindow(ctk.CTk):
         EventBus.subscribe("LANGUAGE_CHANGED", lambda d: self.after(0, self._on_language_changed))
 
         # Social Events abfangen
-        EventBus.subscribe("SOCIAL_FRIEND_STATUS", lambda d: self.after(0, lambda: self.game_state.set_friend_online(d["public_id"], d["status"] == "online")))
+        EventBus.subscribe("SOCIAL_FRIEND_STATUS", lambda d: self.after(0, lambda: self.game_state.set_friend_online(
+            d["public_id"], d["status"] == "online")))
         EventBus.subscribe("SOCIAL_INVITE_RECEIVED", lambda d: self.after(0, lambda: self._show_invite_popup(d)))
-        EventBus.subscribe("SOCIAL_FRIEND_REQUEST_RECEIVED", lambda d: self.after(0, lambda: self._show_friend_request_popup(d)))
+        EventBus.subscribe("SOCIAL_FRIEND_REQUEST_RECEIVED",
+                           lambda d: self.after(0, lambda: self._show_friend_request_popup(d)))
+
+        # --- Party Routing ---
+        EventBus.subscribe("CMD_RETURN_TO_LOBBY", lambda d: self.after(0, self._handle_return_to_lobby))
+        EventBus.subscribe("NET_RETURN_TO_LOBBY", lambda d: self.after(0, self._handle_net_return_to_lobby))
+
+    def _handle_return_to_lobby(self):
+        self.game_state.prepare_next_match()
+        self.show_lobby()
+
+        if self.game_state.is_host:
+            self.network.send_signal("RETURN_TO_LOBBY")
+
+            # SAUBER: Wir rufen den Service auf, der uns die Arbeit abnimmt.
+            new_folder = WorkspaceService.cycle_match_folder(self.game_state.local_drive_folder)
+            self.game_state.match_folder_name = new_folder
+
+            EventBus.emit("CMD_PREPARE_WORKSPACE", {"base_folder": self.game_state.local_drive_folder})
+
+    def _handle_net_return_to_lobby(self):
+        # Der Host ist in die Lobby zurückgekehrt.
+        # Wir entfernen den Code, der uns zwingt, ebenfalls die Lobby zu laden!
+        # So bleibt jeder Client in seinem eigenen End-Screen, bis er selbst auf den Button drückt.
+        pass
 
     def _show_friend_request_popup(self, data):
         sender_name = data.get("sender_name", "Unbekannt")
@@ -374,6 +403,9 @@ class MainWindow(ctk.CTk):
         super().destroy()
 
     def switch_view(self, view_class, **kwargs):
+        # --- NEU: Wenn wir eine View wechseln, stoppen wir sicherheitshalber den LobbyService ---
+        self.lobby_service.stop()
+
         if self.current_view:
             self.current_view.destroy()
         self.current_view = view_class(self, self.game_state, self.network, **kwargs)
@@ -394,7 +426,9 @@ class MainWindow(ctk.CTk):
         self.switch_view(JoinView, router=self)
 
     def show_lobby(self):
+        # --- NEU: Startet die Ansicht und danach die Logik für die Lobby ---
         self.switch_view(LobbyView, router=self)
+        self.lobby_service.start()
 
     def start_game(self):
         self.system_monitor.set_state("GAME_RUNNING")

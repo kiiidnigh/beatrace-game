@@ -20,23 +20,20 @@ class LobbyView(ctk.CTkFrame):
         self._is_destroyed = False
         self._current_dots = ""
 
-        self._join_state = "connecting" if not self.game_state.is_host else "synced"
+        # UX-Status (Was sieht der Nutzer gerade?)
+        self._ui_state = "connecting" if not self.game_state.is_host else "host"
 
         self.animator = TextAnimator(self)
         self.join_timer = None
 
+        # Die View lauscht nur noch auf UI_ Updates vom LobbyService!
         self._listeners = {
-            "NET_CONNECTED": lambda d: self.safe_execute(self._apply_connected),
-            "NET_CLIENT_JOIN": lambda d: self.safe_execute(self._apply_client_join, d),
-            "NET_NAME_TAKEN": lambda d: self.safe_execute(self._apply_name_taken, d),
-            "NET_SYNC_STATE": lambda d: self.safe_execute(self._apply_sync_state, d),
-            "NET_CLIENT_LEAVE": lambda d: self.safe_execute(self._apply_client_leave, d),
-            "NET_LOBBY_CLOSED": lambda d: self.safe_execute(self._apply_lobby_closed),
+            "UI_LOBBY_REFRESH": lambda d: self.safe_execute(self.update_texts),
+            "UI_LOBBY_SYNCED": lambda d: self.safe_execute(self._on_synced),
+            "UI_LOBBY_ERROR_NAME_TAKEN": lambda d: self.safe_execute(self._show_error_name_taken),
+            "UI_LOBBY_ERROR_HANDSHAKE": lambda d: self.safe_execute(self._show_error_handshake),
+            "UI_LOBBY_HOST_CLOSED": lambda d: self.safe_execute(self._show_lobby_closed),
             "NET_START_MATCH": lambda d: self.safe_execute(self.router.start_game),
-            "NET_FOLDER_VERIFIED": lambda d: self.safe_execute(self._apply_folder_verified, d),
-            "SYS_WORKSPACE_READY": lambda d: self.safe_execute(self._on_workspace_ready, d),
-            "SYS_HANDSHAKE_SUCCESS": lambda d: self.safe_execute(self._on_local_handshake_success),
-            "SYS_HANDSHAKE_TIMEOUT": lambda d: self.safe_execute(self._on_handshake_timeout),
             "LANGUAGE_CHANGED": lambda d: self.safe_execute(self.update_texts)
         }
 
@@ -44,15 +41,18 @@ class LobbyView(ctk.CTkFrame):
 
         self.animator.register(self._on_animate_tick)
         self.animator.start()
-
         self._setup_event_listeners()
 
-        self.network.connect(self.game_state.my_name, self.game_state.room_code)
-
         if self.game_state.is_host:
-            self.game_state.ready_players.add(self.game_state.my_name)
-            self.game_state.verified_players.add(self.game_state.my_name)
             self.update_player_list()
+        else:
+            # Client startet den visuellen Countdown
+            if not self.network.is_connected:
+                self.join_timer = CountdownTimer(self, 12, self._on_join_tick, self._on_join_timeout)
+                self.join_timer.start()
+            else:
+                # Wir kommen aus dem Match zurück, sind also schon verbunden
+                self._on_synced()
 
     def update_texts(self):
         self.lbl_code_title.configure(text=translate("lobby.code_label"))
@@ -64,7 +64,7 @@ class LobbyView(ctk.CTkFrame):
             self.btn_close.configure(text=translate("lobby.btn_close"))
             self.update_settings_ui()
         else:
-            if self._join_state == "synced":
+            if self._ui_state == "synced":
                 self.lbl_wait.configure(text=translate("lobby.wait_for_host"))
                 self.btn_leave.configure(text=translate("lobby.btn_leave"))
 
@@ -94,11 +94,8 @@ class LobbyView(ctk.CTkFrame):
     def safe_execute(self, func, *args):
         def wrapper():
             if not self._is_destroyed and self.winfo_exists():
-                try:
-                    func(*args)
-                except Exception:
-                    pass
-
+                try: func(*args)
+                except Exception: pass
         self.after(0, wrapper)
 
     def _on_animate_tick(self, dots):
@@ -107,12 +104,13 @@ class LobbyView(ctk.CTkFrame):
             base = translate("lobby.loading_settings").rstrip('.')
             self.lbl_settings.configure(text=f"{base}{dots}")
 
-        if getattr(self, "_join_state", "") == "connecting":
+        if self._ui_state == "connecting":
             self.lbl_wait.configure(text=f"Verbinde mit Broker{dots}")
 
         self.update_player_list()
 
     def setup_ui(self):
+        # [DER GANZE UI AUFBAU BLEIBT EXAKT IDENTISCH]
         main_container = ctk.CTkFrame(self, fg_color="transparent")
         main_container.pack(fill="both", expand=True)
 
@@ -120,8 +118,7 @@ class LobbyView(ctk.CTkFrame):
         center_frame.pack(expand=True)
 
         self.lbl_code_title = ctk.CTkLabel(center_frame, text=translate("lobby.code_label"),
-                                           font=("Helvetica", 14, "bold"),
-                                           text_color="gray")
+                                           font=("Helvetica", 14, "bold"), text_color="gray")
         self.lbl_code_title.pack(pady=(0, 5))
 
         code_frame = ctk.CTkFrame(center_frame, fg_color="transparent")
@@ -137,14 +134,8 @@ class LobbyView(ctk.CTkFrame):
         self.settings_frame = ctk.CTkFrame(center_frame)
         self.settings_frame.pack(fill="x", pady=20)
 
-        self.lbl_settings = ctk.CTkLabel(
-            self.settings_frame,
-            text=translate("lobby.loading_settings").rstrip('.'),
-            text_color="gray",
-            font=("Helvetica", 14),
-            width=250,
-            anchor="w"
-        )
+        self.lbl_settings = ctk.CTkLabel(self.settings_frame, text=translate("lobby.loading_settings").rstrip('.'),
+                                         text_color="gray", font=("Helvetica", 14), width=250, anchor="w")
         self.lbl_settings.pack(pady=10)
 
         if self.game_state.is_host:
@@ -168,19 +159,18 @@ class LobbyView(ctk.CTkFrame):
             btn_center.pack(expand=True)
 
             self.btn_start = ctk.CTkButton(btn_center, text=translate("lobby.btn_start"), height=50, width=170,
-                                           font=("Helvetica", 16, "bold"),
-                                           fg_color="#1DB954", hover_color="#14833b", command=self.host_start_game)
+                                           font=("Helvetica", 16, "bold"), fg_color="#1DB954", hover_color="#14833b",
+                                           command=self.host_start_game)
             self.btn_start.pack(side="left", padx=5)
 
-            # NEU: Der Einladen-Button in der Mitte!
             self.btn_invite = ctk.CTkButton(btn_center, text=translate("lobby.btn_invite"), height=50, width=140,
-                                            font=("Helvetica", 16, "bold"),
-                                            fg_color="#3a7ebf", hover_color="#1f538d", command=self.open_invite_modal)
+                                            font=("Helvetica", 16, "bold"), fg_color="#3a7ebf", hover_color="#1f538d",
+                                            command=self.open_invite_modal)
             self.btn_invite.pack(side="left", padx=5)
 
             self.btn_close = ctk.CTkButton(btn_center, text=translate("lobby.btn_close"), height=50, width=170,
-                                           font=("Helvetica", 16, "bold"),
-                                           fg_color="#c0392b", hover_color="#e74c3c", command=self.close_lobby)
+                                           font=("Helvetica", 16, "bold"), fg_color="#c0392b", hover_color="#e74c3c",
+                                           command=self.close_lobby)
             self.btn_close.pack(side="left", padx=5)
         else:
             self.lbl_wait = ctk.CTkLabel(self.action_frame, text="Verbinde mit Broker...",
@@ -188,9 +178,11 @@ class LobbyView(ctk.CTkFrame):
             self.lbl_wait.pack(pady=(0, 15))
 
             self.btn_leave = ctk.CTkButton(self.action_frame, text=translate("common.btn_cancel"), height=50, width=250,
-                                           font=("Helvetica", 16, "bold"),
-                                           fg_color="#c0392b", hover_color="#e74c3c", command=self._cancel_join)
+                                           font=("Helvetica", 16, "bold"), fg_color="#c0392b", hover_color="#e74c3c",
+                                           command=self._cancel_join)
             self.btn_leave.pack(expand=True)
+
+    # --- UI INTERAKTIONEN (Knöpfe) ---
 
     def open_invite_modal(self):
         InviteModal(self.winfo_toplevel(), self.game_state, self.network)
@@ -213,8 +205,7 @@ class LobbyView(ctk.CTkFrame):
         self.router.show_home()
 
     def _cancel_join(self):
-        if self.join_timer:
-            self.join_timer.stop()
+        if self.join_timer: self.join_timer.stop()
         self.network.disconnect()
         self.game_state.reset_match_data()
         self.router.show_join()
@@ -222,18 +213,18 @@ class LobbyView(ctk.CTkFrame):
     def host_start_game(self):
         if len(self.game_state.players) < 2:
             self.btn_start.configure(text=translate("lobby.err_min_players"), fg_color="#c0392b", hover_color="#e74c3c")
-            self.after(2000, lambda: self.btn_start.configure(text=translate("lobby.btn_start"), fg_color="#1DB954",
-                                                              hover_color="#14833b"))
+            self.after(2000, lambda: self.btn_start.configure(text=translate("lobby.btn_start"), fg_color="#1DB954", hover_color="#14833b"))
             return
 
         if len(self.game_state.verified_players) < len(self.game_state.players):
             self.btn_start.configure(text="WAITING FOR SYNC...", fg_color="#e67e22", hover_color="#d35400")
-            self.after(2000, lambda: self.btn_start.configure(text=translate("lobby.btn_start"), fg_color="#1DB954",
-                                                              hover_color="#14833b"))
+            self.after(2000, lambda: self.btn_start.configure(text=translate("lobby.btn_start"), fg_color="#1DB954", hover_color="#14833b"))
             return
 
         self.network.send_signal("START_MATCH")
         self.router.start_game()
+
+    # --- UI UPDATES (Getriggert durch den LobbyService) ---
 
     def update_settings_ui(self):
         dist = translate("common.yes") if self.game_state.distribute_time else translate("common.no")
@@ -270,14 +261,12 @@ class LobbyView(ctk.CTkFrame):
 
             self.player_labels[p].configure(text=display_text, text_color=color)
 
-    def _on_workspace_ready(self, data):
-        if self.game_state.is_host:
-            self.game_state.workspace_id = data.get("workspace_id", "")
-
-    def _on_local_handshake_success(self):
-        self.game_state.verified_players.add(self.game_state.my_name)
-        self.update_player_list()
-        self.network.send_signal("FOLDER_VERIFIED")
+    def _on_synced(self):
+        """Client hat den Sync abgeschlossen, stoppe Timer."""
+        if self.join_timer:
+            self.join_timer.stop()
+        self._ui_state = "synced"
+        self.update_texts()
 
     def _on_join_tick(self, seconds_left):
         self.lbl_wait.configure(text=f"Suche Host... ({seconds_left}s)")
@@ -285,112 +274,27 @@ class LobbyView(ctk.CTkFrame):
     def _on_join_timeout(self):
         self.network.disconnect()
         self.game_state.reset_match_data()
-
         def on_close(): self.router.show_join()
-
         CustomPopup(master=self.winfo_toplevel(), title=translate("common.error"),
                     message="Raum nicht gefunden!\nDer Code existiert nicht oder das Spiel wurde bereits beendet.",
                     icon="❌", btn_color="#c0392b", sound_type="error",
                     on_confirm_callback=on_close, on_cancel_callback=on_close)
 
-    def _on_handshake_timeout(self):
-        self.network.send_signal("CLIENT_LEAVE")
-        self.network.disconnect()
-        self.game_state.reset_match_data()
+    def _show_error_name_taken(self):
+        def on_close(): self.router.show_home()
+        CustomPopup(master=self.winfo_toplevel(), title=translate("common.error"),
+                    message=translate("lobby.err_name_taken"), icon="❌", btn_color="#c0392b", sound_type="error",
+                    on_confirm_callback=on_close, on_cancel_callback=on_close)
 
+    def _show_error_handshake(self):
         def on_close(): self.router.show_join()
-
         CustomPopup(master=self.winfo_toplevel(), title=translate("common.error"),
                     message="Sync Timeout!\nDer ausgewählte Ordner passt nicht zum Host.",
                     icon="❌", btn_color="#c0392b", sound_type="error",
                     on_confirm_callback=on_close, on_cancel_callback=on_close)
 
-    def _apply_folder_verified(self, payload):
-        sender = payload.get("sender")
-        if sender:
-            self.game_state.verified_players.add(sender)
-            self.update_player_list()
-
-    def _handle_name_taken(self):
-        self.network.disconnect()
-        self.game_state.reset_match_data()
-
+    def _show_lobby_closed(self):
         def on_close(): self.router.show_home()
-
-        CustomPopup(master=self.winfo_toplevel(), title=translate("common.error"),
-                    message=translate("lobby.err_name_taken"), icon="❌", btn_color="#c0392b", sound_type="error",
-                    on_confirm_callback=on_close, on_cancel_callback=on_close)
-
-    def _handle_lobby_closed(self):
-        self.network.disconnect()
-        self.game_state.reset_match_data()
-
-        def on_close(): self.router.show_home()
-
         CustomPopup(master=self.winfo_toplevel(), title=translate("lobby.closed_title"),
                     message=translate("lobby.closed_msg"), icon="ℹ️", btn_color="#3a7ebf", sound_type="info",
                     on_confirm_callback=on_close, on_cancel_callback=on_close)
-
-    def _apply_connected(self):
-        if not self.game_state.is_host:
-            self.network.send_signal("CLIENT_JOIN")
-            self._join_state = "waiting_host"
-            self.join_timer = CountdownTimer(self, 12, self._on_join_tick, self._on_join_timeout)
-            self.join_timer.start()
-
-    def _apply_client_join(self, payload):
-        sender = payload.get("sender")
-        if self.game_state.is_host:
-            if sender in self.game_state.players:
-                self.network.send_signal("NAME_TAKEN", data={"target": sender})
-                return
-
-            self.game_state.players.append(sender)
-            self.game_state.active_players.append(sender)
-            self.game_state.ready_players.add(sender)
-            self.game_state.set_player_time(sender, self.game_state.start_time_minutes * 60)
-            self.game_state.set_bonus_text(sender, "")
-
-            self.update_player_list()
-            self.network.send_signal("SYNC_STATE", data=self.game_state.export_sync_data())
-
-    def _apply_name_taken(self, payload):
-        data = payload.get("data", {})
-        if not self.game_state.is_host and data.get("target") == self.game_state.my_name:
-            self._handle_name_taken()
-
-    def _apply_sync_state(self, payload):
-        if self.join_timer:
-            self.join_timer.stop()
-
-        data = payload.get("data", {})
-        if not self.game_state.is_host:
-            self._join_state = "synced"
-            self.game_state.load_sync_data(data)
-            self.game_state.ready_players = set(self.game_state.players)
-
-            self.lbl_wait.configure(text=translate("lobby.wait_for_host"))
-            self.btn_leave.configure(text=translate("lobby.btn_leave"), command=self.leave_lobby)
-
-            self.update_settings_ui()
-            self.update_player_list()
-
-            EventBus.emit("CMD_VERIFY_WORKSPACE", data={
-                "base_folder": self.game_state.local_drive_folder,
-                "workspace_id": self.game_state.workspace_id
-            })
-
-    def _apply_client_leave(self, payload):
-        sender = payload.get("sender")
-        if self.game_state.is_host:
-            if sender in self.game_state.players: self.game_state.players.remove(sender)
-            if sender in self.game_state.active_players: self.game_state.active_players.remove(sender)
-            if sender in self.game_state.ready_players: self.game_state.ready_players.remove(sender)
-            if sender in self.game_state.verified_players: self.game_state.verified_players.remove(sender)
-
-            self.update_player_list()
-            self.network.send_signal("SYNC_STATE", data=self.game_state.export_sync_data())
-
-    def _apply_lobby_closed(self):
-        if not self.game_state.is_host:
-            self._handle_lobby_closed()

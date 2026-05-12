@@ -101,10 +101,11 @@ class FinishView(ctk.CTkFrame):
                                       fg_color="#8e44ad", hover_color="#9b59b6", command=self.open_project_folder)
         self.btn_open.pack(side="left", padx=10)
 
-        self.btn_home = ctk.CTkButton(btn_frame, text=translate("finish.btn_home"), height=50, width=250,
-                                      font=("Helvetica", 14, "bold"),
-                                      fg_color="#636E72", hover_color="#2D3436", command=self.go_home)
-        self.btn_home.pack(side="left", padx=10)
+        # NEU: Button führt zurück zur Lobby anstatt ins Home-Menü
+        self.btn_lobby = ctk.CTkButton(btn_frame, text="ZURÜCK ZUR LOBBY", height=50, width=250,
+                                       font=("Helvetica", 14, "bold"),
+                                       fg_color="#3a7ebf", hover_color="#1f538d", command=self.return_to_lobby)
+        self.btn_lobby.pack(side="left", padx=10)
 
     def _create_stat_row(self, parent, title, value):
         box = ctk.CTkFrame(parent, fg_color="#2D3436", corner_radius=8, height=60)
@@ -123,7 +124,6 @@ class FinishView(ctk.CTkFrame):
             if os.path.exists(folder):
                 os.startfile(folder)
 
-    def go_home(self):
-        if self.network:
-            self.network.disconnect()
-        self.router.show_home()
+    def return_to_lobby(self):
+        # KEIN disconnect() mehr! Wir feuern nur das Routing-Event.
+        EventBus.emit("CMD_RETURN_TO_LOBBY")

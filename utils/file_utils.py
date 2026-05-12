@@ -20,10 +20,11 @@ def _get_profile_suffix():
     profile = os.environ.get("BEATRACE_PROFILE", "")
     return f"_{profile}" if profile else ""
 
+
 # --- SETTINGS (App-Konfiguration) ---
 def get_prefs_path():
-    # Speichert z.B. unter %AppData%\Beatrace\settings_tester.json
     return os.path.join(settings.APPDATA_DIR, f"settings{_get_profile_suffix()}.json")
+
 
 def load_prefs():
     path = get_prefs_path()
@@ -35,6 +36,7 @@ def load_prefs():
             return {}
     return {}
 
+
 def save_prefs(prefs_dict):
     path = get_prefs_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -44,9 +46,11 @@ def save_prefs(prefs_dict):
     except Exception as e:
         print(f"Fehler beim Speichern der Settings: {e}")
 
+
 # --- SOCIAL (Identität & Freunde) ---
 def get_social_path():
     return os.path.join(settings.APPDATA_DIR, f"social{_get_profile_suffix()}.json")
+
 
 def load_social():
     path = get_social_path()
@@ -58,6 +62,7 @@ def load_social():
             return {}
     return {}
 
+
 def save_social(social_dict):
     path = get_social_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -67,9 +72,11 @@ def save_social(social_dict):
     except Exception as e:
         print(f"Fehler beim Speichern der Social-Daten: {e}")
 
+
 # --- WORKSPACES (Cloud Basis-Ordner Historie) ---
 def get_workspaces_path():
     return os.path.join(settings.APPDATA_DIR, f"workspaces{_get_profile_suffix()}.json")
+
 
 def load_workspaces():
     path = get_workspaces_path()
@@ -80,6 +87,7 @@ def load_workspaces():
         except Exception:
             return {}
     return {}
+
 
 def save_workspaces(workspaces_dict):
     path = get_workspaces_path()
@@ -94,16 +102,12 @@ def save_workspaces(workspaces_dict):
 # --- FL STUDIO & MATCH LOGIK ---
 
 def get_or_create_workspace_id(base_folder):
-    """
-    Liest oder erstellt die eindeutige Signatur des Cloud-Ordners.
-    Das macht den Sync-Handshake instantan!
-    """
+    """Liest oder erstellt die eindeutige Signatur des Cloud-Ordners beim Host."""
     if not base_folder or not os.path.exists(base_folder):
         return ""
 
     workspace_file = os.path.join(base_folder, ".beatrace_workspace")
 
-    # Wenn die Signatur schon existiert, einfach zurückgeben
     if os.path.exists(workspace_file):
         try:
             with open(workspace_file, "r", encoding="utf-8") as f:
@@ -111,7 +115,6 @@ def get_or_create_workspace_id(base_folder):
         except Exception:
             pass
 
-    # Ansonsten eine neue, eindeutige ID generieren
     new_id = str(uuid.uuid4())
     try:
         with open(workspace_file, "w", encoding="utf-8") as f:
@@ -121,6 +124,22 @@ def get_or_create_workspace_id(base_folder):
         logging.error(f"[FileUtils] Konnte Workspace-ID nicht schreiben: {e}")
 
     return new_id
+
+
+def read_workspace_id(base_folder):
+    """Liest die Workspace-ID live aus, ohne sie neu zu erstellen (Für den Client-Handshake)."""
+    if not base_folder or not os.path.exists(base_folder):
+        return None
+
+    workspace_file = os.path.join(base_folder, ".beatrace_workspace")
+    if os.path.exists(workspace_file):
+        try:
+            with open(workspace_file, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            pass
+
+    return None
 
 
 def _create_fl_studio_shortcut(shortcut_path):
@@ -216,9 +235,11 @@ def get_template_path(selected_path):
 
     return appdata_template_path if os.path.exists(appdata_template_path) else ""
 
+
 # --- USER PROFILE (Eigene Identität & Name) ---
 def get_profile_path():
     return os.path.join(settings.APPDATA_DIR, f"user_profile{_get_profile_suffix()}.json")
+
 
 def load_profile():
     path = get_profile_path()
@@ -229,6 +250,7 @@ def load_profile():
         except Exception:
             return {}
     return {}
+
 
 def save_profile(profile_dict):
     path = get_profile_path()

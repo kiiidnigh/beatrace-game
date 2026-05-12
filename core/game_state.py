@@ -58,6 +58,35 @@ class GameState:
         self.room_code = ""
         self.workspace_id = ""
 
+    def prepare_next_match(self):
+        """
+        Bereitet den State auf die nächste Runde vor, OHNE die Party aufzulösen.
+        Netzwerk, Spielerliste und Host-Rechte bleiben erhalten.
+        """
+        self.active_players = list(self.players)
+
+        # FIX 1 & 2: Alle Spieler in der Lobby sind direkt wieder 'ready'
+        self.ready_players = set(self.players)
+        self.eliminated_players.clear()
+
+        # Der Host hat seinen Ordner ja schon, alle anderen müssen neu verifizieren
+        self.verified_players = {self.my_name} if self.is_host else set()
+
+        # FIX 3: Clients müssen ihre Workspace ID vergessen, um die Syncing-Logik
+        # beim Empfang des nächsten SYNC_STATE vom Host neu zu triggern.
+        if not self.is_host:
+            self.workspace_id = ""
+
+        self._times.clear()
+        self._bonus_texts.clear()
+        self.match_stats.clear()
+        self.active_player = None
+
+        # Zeiten basierend auf den aktuellen Settings neu setzen
+        for player in self.players:
+            self.set_player_time(player, self.start_time_minutes * 60)
+            self.set_bonus_text(player, "")
+
     @property
     def local_match_dir(self):
         if not self.local_drive_folder:

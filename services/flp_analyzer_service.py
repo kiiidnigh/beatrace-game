@@ -225,7 +225,12 @@ class FLPAnalyzerService:
                     error_msg = str(e)
                     if "EventEnum" in error_msg or "enum" in error_msg.lower():
                         logging.warning("[Analyzer] FL Studio Projekt ist zu neu für tiefgehende pyflp Analyse.")
+                        stats["project_data"]["Analyse-Warnung"] = "FL Studio Version zu neu für Details."
                     else:
-                        logging.error(f"[Analyzer] Unerwarteter Fehler bei FLP Analyse: {e}")
+                        logging.error(f"[Analyzer] Unerwarteter Fehler bei FLP Analyse: {error_msg}")
+                        # WICHTIG: Fehler wird nicht verschluckt, sondern explizit in die Daten geschrieben,
+                        # damit die UI (FinishView) ihn in der Statistik-Tabelle anzeigt!
+                        stats["project_data"]["Analyse-Fehler"] = f"Crash: {error_msg}"
+                        stats["fl_version"] = "Unbekannt (Fehler)"
 
         return stats
