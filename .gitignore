@@ -22,5 +22,5 @@ build/
 dist/
 installer/
 libs
-*.spec
+#*.spec
 digest.txt

@@ -6,6 +6,7 @@ import os
 import subprocess
 from core.i18n import translate
 from core.event_bus import EventBus
+from ui.components.custom_popup import CustomPopup
 
 
 class FinishView(ctk.CTkFrame):
@@ -17,12 +18,16 @@ class FinishView(ctk.CTkFrame):
         self.match_stats = self.game_state.match_stats
 
         self._is_destroyed = False
+        self._lobby_closed_by_host = False  # NEU: Merkt sich, ob die Lobby im Hintergrund geschlossen wurde
+
         self.setup_ui()
         EventBus.subscribe("LANGUAGE_CHANGED", self._on_language_changed)
+        EventBus.subscribe("NET_LOBBY_CLOSED", self._on_host_closed_lobby)
 
     def destroy(self):
         self._is_destroyed = True
         EventBus.unsubscribe("LANGUAGE_CHANGED", self._on_language_changed)
+        EventBus.unsubscribe("NET_LOBBY_CLOSED", self._on_host_closed_lobby)
         self.pack_forget()
         self.after(100, lambda: ctk.CTkFrame.destroy(self))
 
@@ -45,9 +50,11 @@ class FinishView(ctk.CTkFrame):
         header_frame = ctk.CTkFrame(main_container, fg_color="transparent")
         header_frame.pack(fill="x", pady=(0, 20))
 
-        self.lbl_title = ctk.CTkLabel(header_frame, text=translate("finish.title"), font=("Helvetica", 42, "bold"), text_color="#1DB954")
+        self.lbl_title = ctk.CTkLabel(header_frame, text=translate("finish.title"), font=("Helvetica", 42, "bold"),
+                                      text_color="#1DB954")
         self.lbl_title.pack()
-        self.lbl_subtitle = ctk.CTkLabel(header_frame, text=translate("finish.subtitle"), font=("Helvetica", 16), text_color="gray")
+        self.lbl_subtitle = ctk.CTkLabel(header_frame, text=translate("finish.subtitle"), font=("Helvetica", 16),
+                                         text_color="gray")
         self.lbl_subtitle.pack()
 
         content_frame = ctk.CTkFrame(main_container, fg_color="transparent")
@@ -56,11 +63,13 @@ class FinishView(ctk.CTkFrame):
         left_panel = ctk.CTkScrollableFrame(content_frame, fg_color="#1e1e1e", width=400, corner_radius=10)
         left_panel.pack(side="left", fill="both", expand=True, padx=(0, 10))
 
-        self.lbl_proj_data = ctk.CTkLabel(left_panel, text=translate("finish.project_data_title"), font=("Helvetica", 20, "bold"))
+        self.lbl_proj_data = ctk.CTkLabel(left_panel, text=translate("finish.project_data_title"),
+                                          font=("Helvetica", 20, "bold"))
         self.lbl_proj_data.pack(pady=(15, 15))
 
         project_data = self.match_stats.get("project_data", {})
-        self._create_stat_row(left_panel, translate("finish.stat_file_size"), self.match_stats.get("file_size", "0.00 MB"))
+        self._create_stat_row(left_panel, translate("finish.stat_file_size"),
+                              self.match_stats.get("file_size", "0.00 MB"))
 
         if not project_data:
             ctk.CTkLabel(left_panel, text=translate("finish.no_data"), text_color="gray").pack(pady=20)
@@ -75,7 +84,8 @@ class FinishView(ctk.CTkFrame):
         right_panel = ctk.CTkScrollableFrame(content_frame, fg_color="#2D3436", width=400, corner_radius=10)
         right_panel.pack(side="right", fill="both", expand=True, padx=(10, 0))
 
-        self.lbl_awards = ctk.CTkLabel(right_panel, text=translate("finish.awards_title"), font=("Helvetica", 20, "bold"), text_color="#f1c40f")
+        self.lbl_awards = ctk.CTkLabel(right_panel, text=translate("finish.awards_title"),
+                                       font=("Helvetica", 20, "bold"), text_color="#f1c40f")
         self.lbl_awards.pack(pady=(15, 15))
 
         awards = self.match_stats.get("awards", {})
@@ -101,11 +111,21 @@ class FinishView(ctk.CTkFrame):
                                       fg_color="#8e44ad", hover_color="#9b59b6", command=self.open_project_folder)
         self.btn_open.pack(side="left", padx=10)
 
-        # NEU: Button führt zurück zur Lobby anstatt ins Home-Menü
         self.btn_lobby = ctk.CTkButton(btn_frame, text="ZURÜCK ZUR LOBBY", height=50, width=250,
                                        font=("Helvetica", 14, "bold"),
                                        fg_color="#3a7ebf", hover_color="#1f538d", command=self.return_to_lobby)
         self.btn_lobby.pack(side="left", padx=10)
+
+    def _on_host_closed_lobby(self, data=None):
+        """Wird getriggert, wenn der Host die Lobby schließt. Wir merken uns das nur heimlich."""
+
+        def handle_close():
+            if self._is_destroyed or not self.winfo_exists():
+                return
+            # Statt den Spieler sofort rauszuwerfen, merken wir uns nur, dass die Lobby zu ist.
+            self._lobby_closed_by_host = True
+
+        self.after(0, handle_close)
 
     def _create_stat_row(self, parent, title, value):
         box = ctk.CTkFrame(parent, fg_color="#2D3436", corner_radius=8, height=60)
@@ -113,7 +133,8 @@ class FinishView(ctk.CTkFrame):
         box.pack_propagate(False)
 
         ctk.CTkLabel(box, text=title, font=("Helvetica", 14), text_color="gray").pack(side="left", padx=15)
-        ctk.CTkLabel(box, text=str(value), font=("Helvetica", 16, "bold"), text_color="white").pack(side="right", padx=15)
+        ctk.CTkLabel(box, text=str(value), font=("Helvetica", 16, "bold"), text_color="white").pack(side="right",
+                                                                                                    padx=15)
 
     def open_project_folder(self):
         path = self.game_state.local_project_path
@@ -125,5 +146,27 @@ class FinishView(ctk.CTkFrame):
                 os.startfile(folder)
 
     def return_to_lobby(self):
-        # KEIN disconnect() mehr! Wir feuern nur das Routing-Event.
-        EventBus.emit("CMD_RETURN_TO_LOBBY")
+        """Wird aufgerufen, wenn der Nutzer fertig ist und auf 'Zurück zur Lobby' klickt."""
+        # Prüfen, ob der Host in der Zwischenzeit die Lobby geschlossen hat
+        if self._lobby_closed_by_host:
+            # Verbindung trennen und Daten bereinigen
+            self.network.disconnect()
+            self.game_state.reset_match_data()
+
+            # Popup anzeigen und danach ins Hauptmenü schicken
+            def on_close():
+                self.router.show_home()
+
+            CustomPopup(
+                master=self.winfo_toplevel(),
+                title=translate("lobby.closed_title"),
+                message=translate("lobby.closed_msg"),
+                icon="ℹ️",
+                btn_color="#3a7ebf",
+                sound_type="info",
+                on_confirm_callback=on_close,
+                on_cancel_callback=on_close
+            )
+        else:
+            # Normale Rückkehr in die Lobby (Host ist noch da)
+            EventBus.emit("CMD_RETURN_TO_LOBBY")

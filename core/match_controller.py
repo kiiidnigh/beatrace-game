@@ -36,7 +36,8 @@ class MatchController:
             "NET_PAUSE": self._on_net_pause,
             "NET_RESUME": self._on_net_resume,
             "NET_ELIMINATED": self._on_net_eliminated,
-            "NET_FINISHED": self._on_net_finished
+            "NET_FINISHED": self._on_net_finished,
+            "NET_CLIENT_LEAVE": self._on_net_client_leave  # <--- NEU: Überwacht Verbindungsabbrüche im Match
         }
         self._setup_subscriptions()
 
@@ -79,6 +80,10 @@ class MatchController:
                 EventBus.emit("STATE_TIME_UP")
 
     def _handle_toggle_pause(self, data):
+        # FIX: Ein Spieler darf nur pausieren, wenn er WIRKLICH am Zug ist!
+        if self.state.active_player != self.state.my_name:
+            return
+
         time_left = self.state.get_player_time(self.state.my_name)
         if not self.is_paused:
             self.is_paused = True
@@ -215,6 +220,34 @@ class MatchController:
         EventBus.emit("CMD_START_DOWNLOAD_WATCH",
                       data={"expected_to_sync": payload.get("saved", True), "expected_hash": payload.get("file_hash"),
                             "last_player": sender})
+
+    def _on_net_client_leave(self, data):
+        # FIX: Behandelt Spielabbrüche während des Matches richtig
+        sender = data.get("sender")
+        if not sender or sender not in self.state.players:
+            return
+
+        logging.info(f"[MatchController] Spieler {sender} hat das laufende Spiel verlassen.")
+
+        # Komplett aus der Spielerliste entfernen, damit er in der Lobby nicht mehr auftaucht!
+        if sender in self.state.players:
+            self.state.players.remove(sender)
+
+        self.last_finished_player = sender
+        self.state.eliminate_player(sender)
+        EventBus.emit("STATE_ELIMINATED", data={"player": sender, "time_left": 0, "note": "Spiel verlassen"})
+
+        # Falls der Spieler gerade an der Reihe war, sofort abbrechen und Runde weitergeben
+        if self.state.active_player == sender:
+            self.state.active_player = None
+            # Es gibt kein neues Projekt, deshalb überspringen wir den File-Watcher komplett
+            EventBus.emit("CMD_START_DOWNLOAD_WATCH", data={
+                "expected_to_sync": False,
+                "expected_hash": None,
+                "last_player": sender
+            })
+
+        self._check_game_over()
 
     def format_time(self, seconds):
         if seconds < 0: seconds = 0
