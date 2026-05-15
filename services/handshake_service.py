@@ -7,11 +7,12 @@ import threading
 import logging
 from core.event_bus import EventBus
 from utils.file_utils import get_or_create_workspace_id
-from services.workspace_service import WorkspaceService
+from services.base_service import BaseService
 
-
-class HandshakeService:
-    def __init__(self):
+class HandshakeService(BaseService):
+    def __init__(self, workspace_service):
+        super().__init__()
+        self.workspace_service = workspace_service
         self._is_checking = False
 
         self._listeners = {
@@ -19,19 +20,15 @@ class HandshakeService:
             "CMD_VERIFY_WORKSPACE": self._verify_workspace,
             "CMD_STOP_HANDSHAKE_CHECK": self._stop_check_loop
         }
-
-        for event, func in self._listeners.items():
-            EventBus.subscribe(event, func)
+        self.register_listeners()
 
         logging.info("[HandshakeService] Bereit für schnelle Workspace-Verifikation.")
 
     def cleanup(self):
         self._is_checking = False
-        for event, func in self._listeners.items():
-            EventBus.unsubscribe(event, func)
+        super().cleanup()
 
     def _prepare_workspace(self, data):
-        """Erstellt oder liest die Workspace-ID für den Host asynchron."""
         base_folder = data.get("base_folder")
         if not base_folder:
             EventBus.emit("SYS_HANDSHAKE_ERROR", data={"error": "Kein Ordner übergeben"})
@@ -44,9 +41,8 @@ class HandshakeService:
                     EventBus.emit("SYS_HANDSHAKE_ERROR", data={"error": "Konnte Workspace ID nicht erstellen/lesen."})
                     return
 
-                # FIX: Nur noch den Ordner in der JSON speichern!
-                WorkspaceService.add_known_folder(base_folder)
-
+                # FIX: Wir nutzen den injizierten Service
+                self.workspace_service.add_known_folder(base_folder)
                 logging.info(f"[HandshakeService] Workspace ID generiert/geladen: {wid}")
                 EventBus.emit("SYS_WORKSPACE_READY", data={"workspace_id": wid})
             except Exception as e:
@@ -56,7 +52,6 @@ class HandshakeService:
         threading.Thread(target=task, daemon=True).start()
 
     def _verify_workspace(self, data):
-        """Prüft asynchron, ob die Workspace-ID beim Joiner existiert."""
         if self._is_checking:
             return
 
@@ -71,7 +66,6 @@ class HandshakeService:
 
         def check_loop():
             logging.info(f"[HandshakeService] Prüfe lokale Signatur für ID: {expected_id}...")
-
             attempts = 0
             max_attempts = 5
             workspace_file = os.path.join(base_folder, ".beatrace_workspace")
@@ -83,10 +77,8 @@ class HandshakeService:
                             local_id = f.read().strip()
                             if local_id == expected_id:
                                 logging.info("[HandshakeService] Ordner blitzschnell verifiziert!")
-
-                                # FIX: Auch der Client speichert nur noch den Ordnerpfad!
-                                WorkspaceService.add_known_folder(base_folder)
-
+                                # FIX: Wir nutzen den injizierten Service
+                                self.workspace_service.add_known_folder(base_folder)
                                 EventBus.emit("SYS_HANDSHAKE_SUCCESS")
                                 self._is_checking = False
                                 return

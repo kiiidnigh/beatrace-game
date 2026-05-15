@@ -7,10 +7,11 @@ from ui.components.mini_player import MiniPlayer
 from ui.components.toast import ToastNotification
 from core.event_bus import EventBus
 from core.i18n import translate
+from services.base_service import BaseService
 
-
-class UXService:
+class UXService(BaseService):
     def __init__(self, ui_mode, root_window, game_state_ref):
+        super().__init__()
         self.ui_mode = ui_mode
         self.root_window = root_window
         self.game_state_ref = game_state_ref
@@ -33,15 +34,10 @@ class UXService:
             "STATE_PAUSED": lambda d: self.root_window.after(0, lambda: self._on_pause_event(True, d.get("player"))),
             "STATE_RESUMED": lambda d: self.root_window.after(0, lambda: self._on_pause_event(False, d.get("player")))
         }
-        self._setup_subscriptions()
-
-    def _setup_subscriptions(self):
-        for event, func in self._listeners.items():
-            EventBus.subscribe(event, func)
+        self.register_listeners()
 
     def cleanup(self):
-        for event, func in self._listeners.items():
-            EventBus.unsubscribe(event, func)
+        super().cleanup()
         self.root_window.after(0, self.end_turn)
 
     def _on_pause_event(self, is_paused, player_name):

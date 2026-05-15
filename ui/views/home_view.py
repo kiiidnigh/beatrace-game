@@ -3,33 +3,26 @@
 # ================================================
 import customtkinter as ctk
 from utils.file_utils import load_prefs, save_prefs
-from ui.components.settings_modal import SettingsModal
-from ui.components.friends_modal import FriendsModal
 from core.i18n import translate
+from ui.views.base_view import BaseView
 from core.event_bus import EventBus
-from services.identity_service import IdentityService
 
 
-class HomeView(ctk.CTkFrame):
-    def __init__(self, master, game_state, network, router):
-        super().__init__(master)
+class HomeView(BaseView):
+    def __init__(self, master, game_state, network, router, **kwargs):
+        super().__init__(master, **kwargs)
         self.game_state = game_state
         self.router = router
 
-        prefs = load_prefs()
-        self.game_state.my_name = prefs.get("last_username", "")
+        self.game_state.my_name = self.router.app_core.identity_service.get_display_name()
         self.game_state.reset_match_data()
 
+        self._listeners = {
+            "LANGUAGE_CHANGED": lambda d: self.safe_execute(self.update_texts)
+        }
+        self.register_listeners()
+
         self.setup_ui()
-        EventBus.subscribe("LANGUAGE_CHANGED", self._on_language_changed)
-
-    def destroy(self):
-        EventBus.unsubscribe("LANGUAGE_CHANGED", self._on_language_changed)
-        self.pack_forget()
-        self.after(100, lambda: ctk.CTkFrame.destroy(self))
-
-    def _on_language_changed(self, data=None):
-        self.after(0, self.update_texts)
 
     def update_texts(self):
         self.btn_friends.configure(text=translate("home.btn_friends"))
@@ -45,14 +38,16 @@ class HomeView(ctk.CTkFrame):
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
         top_frame.pack(fill="x", padx=20, pady=10)
 
+        # Nutzt nun die zentrale Router-Funktion
         self.btn_friends = ctk.CTkButton(top_frame, text=translate("home.btn_friends"), width=120, height=35,
                                          font=("Helvetica", 14, "bold"),
-                                         fg_color="#3a7ebf", hover_color="#1f538d", command=self.open_friends)
+                                         fg_color="#3a7ebf", hover_color="#1f538d", command=self.router.open_friends)
         self.btn_friends.pack(side="left")
 
+        # Nutzt nun die zentrale Router-Funktion
         self.btn_settings = ctk.CTkButton(top_frame, text=translate("home.btn_settings"), width=120, height=35,
                                           font=("Helvetica", 14),
-                                          fg_color="#636E72", hover_color="#2D3436", command=self.open_settings)
+                                          fg_color="#636E72", hover_color="#2D3436", command=self.router.open_settings)
         self.btn_settings.pack(side="right")
 
         center_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -66,7 +61,6 @@ class HomeView(ctk.CTkFrame):
                                             font=("Helvetica", 16))
         self.lbl_player_name.pack(pady=(0, 5))
 
-        # --- Horizontaler Frame für Name & Edit-Button ---
         name_frame = ctk.CTkFrame(center_frame, fg_color="transparent")
         name_frame.pack(pady=10)
 
@@ -74,12 +68,10 @@ class HomeView(ctk.CTkFrame):
         if self.game_state.my_name:
             self.name_entry.insert(0, self.game_state.my_name)
 
-        # Feld ist standardmäßig für Eingaben gesperrt
         self.name_entry.configure(state="disabled", text_color="gray")
         self.name_entry.pack(side="left", padx=(0, 10))
 
         self._is_editing_name = False
-        # FIX: Unicode Symbole (✎ und ✓) anstatt System-Emojis, damit der Button nicht die Größe wechselt
         self.btn_edit_name = ctk.CTkButton(name_frame, text="✎", width=50, height=50, font=("Helvetica", 24),
                                            fg_color="#2D3436", hover_color="#636E72", command=self._toggle_edit_name)
         self.btn_edit_name.pack(side="left")
@@ -115,7 +107,6 @@ class HomeView(ctk.CTkFrame):
         self.btn_copy_id.pack(side="left")
 
     def _toggle_edit_name(self):
-        """Entsperrt das Feld zur Namensänderung oder speichert den neuen Namen."""
         if not self._is_editing_name:
             self._is_editing_name = True
             self.name_entry.configure(state="normal", text_color="white")
@@ -130,7 +121,6 @@ class HomeView(ctk.CTkFrame):
                 self.name_entry.configure(state="disabled", text_color="gray")
                 self.btn_edit_name.configure(text="✎", fg_color="#2D3436", hover_color="#636E72")
             else:
-                # Fallback, falls der Nutzer einen leeren oder zu kurzen Namen abspeichern will
                 self.error_label.configure(text="Name muss mind. 3 Zeichen lang sein!")
 
     def _copy_my_id(self):
@@ -140,27 +130,18 @@ class HomeView(ctk.CTkFrame):
         self.btn_copy_id.configure(text="✓", fg_color="#1DB954", hover_color="#14833b")
         self.after(2000, lambda: self.btn_copy_id.configure(text="📋", fg_color="#2D3436", hover_color="#636E72"))
 
-    def open_settings(self):
-        SettingsModal(self.winfo_toplevel())
-
-    def open_friends(self):
-        FriendsModal(self.winfo_toplevel(), self.game_state)
-
     def _save_username(self):
         name = self.name_entry.get().strip()
         if len(name) >= 3:
             self.game_state.my_name = name
+
             prefs = load_prefs()
             prefs["last_username"] = name
             save_prefs(prefs)
 
-            # Identity Service auf den neuen Namen aktualisieren
-            IdentityService.set_display_name(name)
+            self.router.app_core.identity_service.set_display_name(name)
 
-            # Über MQTT das Update an alle Freunde schicken
-            if hasattr(self.router, 'presence_service'):
-                self.router.presence_service._broadcast_presence()
-
+            EventBus.emit("CMD_BROADCAST_PRESENCE")
             return True
         return False
 

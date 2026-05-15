@@ -1,4 +1,3 @@
-
 {
     "common": {
         "btn_back": "◀ Zurück",
@@ -116,6 +115,7 @@
         "title": "App Einstellungen",
         "tab_general": "Allgemein",
         "tab_sound": "Sound",
+        "tab_daws": "DAWs",
         "language_label": "Language / Sprache:",
         "ux_mode_label": "UX Modus (während deines Zuges)",
         "ux_standard_desc": "Das normale Fenster bleibt offen.",
@@ -129,7 +129,9 @@
         "snd_tick": "Timer Tick (Letzte 10s)",
         "snd_turn_end": "Zug Abgeben",
         "snd_eliminated": "Spieler Ausgeschieden",
-        "snd_match_finish": "Match Ende"
+        "snd_match_finish": "Match Ende",
+        "btn_browse": "Durchsuchen...",
+        "status_missing": "Kein Pfad angegeben"
     },
     "status": {
         "opening_daw": "Öffne DAW...",

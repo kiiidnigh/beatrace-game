@@ -8,6 +8,7 @@ import hashlib
 import subprocess
 import shutil
 import uuid
+import logging
 from config import settings
 
 # Pfade
@@ -21,88 +22,91 @@ def _get_profile_suffix():
     return f"_{profile}" if profile else ""
 
 
+# --- SICHERERE JSON HELPER ---
+def _safe_json_load(path, default_factory=dict):
+    """
+    Fail-Fast Implementierung: Verhindert, dass defekte Dateien stumm
+    mit einem leeren Dictionary überschrieben werden.
+    """
+    if not os.path.exists(path):
+        return default_factory()
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        backup_path = path + ".corrupt.bak"
+        shutil.copy2(path, backup_path)
+        logging.error(f"[FileUtils] JSON-FEHLER! Datei {path} ist korrupt. Backup: {backup_path} | Fehler: {e}")
+
+        # UI alarmieren (Das MainWindow zeigt ein Popup an)
+        from core.event_bus import EventBus
+        EventBus.emit("SYS_FILE_CORRUPTED", {"file": os.path.basename(path)})
+
+        return default_factory()
+    except Exception as e:
+        logging.error(f"[FileUtils] Unerwarteter Lesefehler bei {path}: {e}")
+        return default_factory()
+
+
+def _safe_json_save(path, data_dict):
+    """
+    DRY Implementierung: Zentralisiert das Speichern von JSON-Dateien inkl. Ordner-Erstellung und Error-Handling.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data_dict, f, indent=4)
+    except Exception as e:
+        logging.error(f"[FileUtils] Fehler beim Speichern von {path}: {e}")
+
+
 # --- SETTINGS (App-Konfiguration) ---
 def get_prefs_path():
     return os.path.join(settings.APPDATA_DIR, f"settings{_get_profile_suffix()}.json")
 
-
 def load_prefs():
-    path = get_prefs_path()
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
+    return _safe_json_load(get_prefs_path())
 
 def save_prefs(prefs_dict):
-    path = get_prefs_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(prefs_dict, f, indent=4)
-    except Exception as e:
-        print(f"Fehler beim Speichern der Settings: {e}")
+    _safe_json_save(get_prefs_path(), prefs_dict)
 
 
 # --- SOCIAL (Identität & Freunde) ---
 def get_social_path():
     return os.path.join(settings.APPDATA_DIR, f"social{_get_profile_suffix()}.json")
 
-
 def load_social():
-    path = get_social_path()
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
+    return _safe_json_load(get_social_path())
 
 def save_social(social_dict):
-    path = get_social_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(social_dict, f, indent=4)
-    except Exception as e:
-        print(f"Fehler beim Speichern der Social-Daten: {e}")
+    _safe_json_save(get_social_path(), social_dict)
 
 
 # --- WORKSPACES (Cloud Basis-Ordner Historie) ---
 def get_workspaces_path():
     return os.path.join(settings.APPDATA_DIR, f"workspaces{_get_profile_suffix()}.json")
 
-
 def load_workspaces():
-    path = get_workspaces_path()
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
+    return _safe_json_load(get_workspaces_path())
 
 def save_workspaces(workspaces_dict):
-    path = get_workspaces_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(workspaces_dict, f, indent=4)
-    except Exception as e:
-        print(f"Fehler beim Speichern der Workspaces: {e}")
+    _safe_json_save(get_workspaces_path(), workspaces_dict)
 
 
-# --- FL STUDIO & MATCH LOGIK ---
+# --- USER PROFILE (Eigene Identität & Name) ---
+def get_profile_path():
+    return os.path.join(settings.APPDATA_DIR, f"user_profile{_get_profile_suffix()}.json")
 
+def load_profile():
+    return _safe_json_load(get_profile_path())
+
+def save_profile(profile_dict):
+    _safe_json_save(get_profile_path(), profile_dict)
+
+
+# --- MATCH LOGIK ---
 def get_or_create_workspace_id(base_folder):
-    """Liest oder erstellt die eindeutige Signatur des Cloud-Ordners beim Host."""
     if not base_folder or not os.path.exists(base_folder):
         return ""
 
@@ -120,14 +124,12 @@ def get_or_create_workspace_id(base_folder):
         with open(workspace_file, "w", encoding="utf-8") as f:
             f.write(new_id)
     except Exception as e:
-        import logging
         logging.error(f"[FileUtils] Konnte Workspace-ID nicht schreiben: {e}")
 
     return new_id
 
 
 def read_workspace_id(base_folder):
-    """Liest die Workspace-ID live aus, ohne sie neu zu erstellen (Für den Client-Handshake)."""
     if not base_folder or not os.path.exists(base_folder):
         return None
 
@@ -159,7 +161,7 @@ def _create_fl_studio_shortcut(shortcut_path):
             f.write(vbs_script)
         subprocess.run(["cscript", "//Nologo", vbs_path], creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception as e:
-        print(f"Verknüpfung konnte nicht erstellt werden: {e}")
+        logging.error(f"Verknüpfung konnte nicht erstellt werden: {e}")
     finally:
         if os.path.exists(vbs_path):
             os.remove(vbs_path)
@@ -234,29 +236,3 @@ def get_template_path(selected_path):
         return selected_path
 
     return appdata_template_path if os.path.exists(appdata_template_path) else ""
-
-
-# --- USER PROFILE (Eigene Identität & Name) ---
-def get_profile_path():
-    return os.path.join(settings.APPDATA_DIR, f"user_profile{_get_profile_suffix()}.json")
-
-
-def load_profile():
-    path = get_profile_path()
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-
-def save_profile(profile_dict):
-    path = get_profile_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(profile_dict, f, indent=4)
-    except Exception as e:
-        print(f"Fehler beim Speichern des Profils: {e}")

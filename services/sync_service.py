@@ -1,13 +1,17 @@
+# ================================================
+# FILE: services/sync_service.py
+# ================================================
 import os
 import time
 import threading
 import logging
 from utils.file_utils import calculate_md5
 from core.event_bus import EventBus
+from services.base_service import BaseService
 
-
-class SyncService:
+class SyncService(BaseService):
     def __init__(self, project_path):
+        super().__init__()
         self.project_path = project_path
         self._stop_event = threading.Event()
 
@@ -16,16 +20,11 @@ class SyncService:
             "CMD_WATCH_DOWNLOAD": self._handle_watch_download,
             "CMD_STOP_SYNC_MONITOR": lambda d: self._stop_event.set()
         }
-        self._setup_subscriptions()
-
-    def _setup_subscriptions(self):
-        for event, func in self._listeners.items():
-            EventBus.subscribe(event, func)
+        self.register_listeners()
 
     def cleanup(self):
         self._stop_event.set()
-        for event, func in self._listeners.items():
-            EventBus.unsubscribe(event, func)
+        super().cleanup()
 
     def _handle_wait_lock(self, data):
         max_attempts = data.get("max_attempts", 100)

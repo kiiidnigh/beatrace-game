@@ -12,11 +12,12 @@ from utils.file_utils import load_prefs, save_prefs, get_available_templates, op
 from utils.ui_utils import TextAnimator
 from core.i18n import translate
 from core.event_bus import EventBus
+from ui.views.base_view import BaseView
 
 
-class HostView(ctk.CTkFrame):
-    def __init__(self, master, game_state, network, router):
-        super().__init__(master)
+class HostView(BaseView):
+    def __init__(self, master, game_state, network, router, **kwargs):
+        super().__init__(master, **kwargs)
         self.game_state = game_state
         self.network = network
         self.router = router
@@ -33,40 +34,33 @@ class HostView(ctk.CTkFrame):
         default_val = next((n for n in self.available_names if "default.flp" in n),
                            self.available_names[0] if self.available_names else "Keine Templates")
 
+        self._listeners = {
+            "LANGUAGE_CHANGED": lambda d: self.safe_execute(self.update_texts),
+            "SYS_WORKSPACE_READY": lambda d: self.safe_execute(self._on_workspace_ready, d),
+            "SYS_HANDSHAKE_ERROR": lambda d: self.safe_execute(self._on_handshake_error, d)
+        }
+        self.register_listeners()
+
         self.setup_ui(default_val)
 
         self.animator = TextAnimator(self)
         self.animator.register(self._on_animate_tick)
         self.animator.start()
 
-        self._listeners = {
-            "LANGUAGE_CHANGED": self._on_language_changed,
-            "SYS_WORKSPACE_READY": self._on_workspace_ready,
-            "SYS_HANDSHAKE_ERROR": self._on_handshake_error
-        }
-        for event, func in self._listeners.items():
-            EventBus.subscribe(event, func)
-
     def destroy(self):
         self.animator.stop()
-        for event, func in self._listeners.items():
-            EventBus.unsubscribe(event, func)
-        self.pack_forget()
-        self.after(100, lambda: ctk.CTkFrame.destroy(self))
+        super().destroy()
 
     def _on_animate_tick(self, dots):
         if self.btn_create.cget("state") == "disabled":
             base = translate("host.loading").rstrip('.')
             self.file_label.configure(text=f"{base}{dots}", text_color="orange")
 
-    def _on_language_changed(self, data=None):
-        self.after(0, self.update_texts)
-
     def _on_handshake_error(self, data):
         error_msg = data.get("error", "Unknown")
-        self.after(0, lambda: self.error_label.configure(text=f"Handshake Error: {error_msg}"))
-        self.after(0, lambda: self.btn_create.configure(state="normal"))
-        self.after(0, self.apply_auto_mode)
+        self.error_label.configure(text=f"Handshake Error: {error_msg}")
+        self.btn_create.configure(state="normal")
+        self.apply_auto_mode()
 
     def update_texts(self):
         self.btn_back.configure(text=translate("common.btn_back"))
@@ -296,9 +290,7 @@ class HostView(ctk.CTkFrame):
         self.game_state.set_player_time(self.game_state.my_name, self.game_state.start_time_minutes * 60)
         self.game_state.set_bonus_text(self.game_state.my_name, "")
 
-        # FIX: Host registriert sich selbst bei der Initiierung der Lobby!
         self.game_state.verified_players.add(self.game_state.my_name)
-        # FIX 2: Der Host ist beim Start natürlich immer bereit, damit er direkt einen grünen Namen bekommt.
         self.game_state.ready_players.add(self.game_state.my_name)
 
-        self.after(0, self.router.show_lobby)
+        self.router.show_lobby()

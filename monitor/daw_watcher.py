@@ -1,24 +1,29 @@
+# ================================================
+# FILE: monitor/daw_watcher.py
+# ================================================
 import time
 import threading
 import psutil
 from pynput import mouse
-from utils.process import is_fl_running, force_save_and_close_fl, FL_PROCESS_NAME
+from services.daws import get_current_daw
 
 
-class FLWatcher:
+class DAWWatcher:
     def __init__(self):
         self._monitoring_start = False
         self._monitoring_interaction = False
         self._monitoring_exit = False
-        # FIX: Referenz auf den Listener speichern, um Memory Leaks zu verhindern
         self._mouse_listener = None
+
+        # OCP: Wir holen uns die aktuell aktive DAW
+        self.daw = get_current_daw()
 
     def wait_for_start(self, callback):
         self._monitoring_start = True
 
         def loop():
             while self._monitoring_start:
-                if is_fl_running():
+                if self.daw.is_running():
                     self._monitoring_start = False
                     if callback: callback()
                     return
@@ -39,11 +44,9 @@ class FLWatcher:
             self._mouse_listener = mouse.Listener(on_click=on_click)
             self._mouse_listener.start()
 
-            # Warten, bis Überwachung abgebrochen wird oder Listener stirbt
             while self._monitoring_interaction and self._mouse_listener.is_alive():
                 time.sleep(0.1)
 
-            # Fail-Safe: Wenn die Überwachung von außen abgebrochen wird, Listener killen
             if self._mouse_listener and self._mouse_listener.is_alive():
                 self._mouse_listener.stop()
 
@@ -60,7 +63,7 @@ class FLWatcher:
             while self._monitoring_exit and not target_proc:
                 for p in psutil.process_iter(['name']):
                     try:
-                        if p.info['name'] and p.info['name'].lower() == FL_PROCESS_NAME:
+                        if p.info['name'] and p.info['name'].lower() == self.daw.process_name:
                             target_proc = p
                             break
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -80,20 +83,16 @@ class FLWatcher:
         threading.Thread(target=loop, daemon=True).start()
 
     def auto_save_and_close(self):
-        """Versucht FL Studio sauber mit Auto-Save zu beenden."""
-
         def run():
-            force_save_and_close_fl()
-            # Fail-Safe Überprüfung nach 5 Sekunden
+            self.daw.force_save_and_close()
             time.sleep(5)
-            if is_fl_running():
+            if self.daw.is_running():
                 import logging
-                logging.warning("[FLWatcher] Auto-Save konnte FL Studio nicht beenden!")
+                logging.warning(f"[DAWWatcher] Auto-Save konnte {self.daw.name} nicht beenden!")
 
         threading.Thread(target=run, daemon=True).start()
 
     def stop(self):
-        """Stoppt alle Überwachungen sofort."""
         self._monitoring_start = False
         self._monitoring_interaction = False
         self._monitoring_exit = False

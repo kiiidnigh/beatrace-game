@@ -1,10 +1,14 @@
 # ================================================
 # FILE: ui/components/settings_modal.py
 # ================================================
+import os
+import tkinter.filedialog as filedialog
 import customtkinter as ctk
 from utils.file_utils import load_prefs, save_prefs
+from utils.os_utils import extract_exe_icon
 from utils.ui_utils import get_centered_geometry
 from core.event_bus import EventBus
+from core.events import UIEvents
 from core.i18n import translate, Translator
 
 
@@ -13,19 +17,20 @@ class SettingsModal(ctk.CTkToplevel):
         super().__init__(master)
 
         self.title(translate("settings.title"))
-        self.attributes('-topmost', True)
         self.resizable(False, False)
 
+        # KISS: transient bindet das Fenster an den Master (minimiert sich mit)
+        # grab_set() wurde entfernt, damit das Hauptfenster minimierbar bleibt.
         self.transient(master)
-        self.grab_set()
 
-        # Nutzt jetzt die saubere Helfer-Funktion aus den Utils
         self.geometry(get_centered_geometry(master, width=450, height=650))
 
         self.on_save_callback = on_save_callback
         self.prefs = load_prefs()
         if "sounds" not in self.prefs:
             self.prefs["sounds"] = {}
+
+        self._temp_fl_path = self.prefs.get("fl_studio_path", "")
 
         self.lang_map = {"English": "en", "Deutsch": "de"}
         self.rev_lang_map = {"en": "English", "de": "Deutsch"}
@@ -38,9 +43,11 @@ class SettingsModal(ctk.CTkToplevel):
 
         self.tabview.add(translate("settings.tab_general"))
         self.tabview.add(translate("settings.tab_sound"))
+        self.tabview.add(translate("settings.tab_daws"))
 
         self._setup_general_tab()
         self._setup_sound_tab()
+        self._setup_daws_tab()
 
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(pady=20, side="bottom")
@@ -105,8 +112,8 @@ class SettingsModal(ctk.CTkToplevel):
         self.toggles = {}
         sound_options = [
             ("btn_click", translate("settings.snd_btn_click")),
-            ("lobby_join", translate("settings.snd_lobby_join")),
-            ("lobby_leave", translate("settings.snd_lobby_leave")),
+            ("lobby_join", translate("settings.lobby_join", "Lobby Join")),  # Fallback string
+            ("lobby_leave", translate("settings.lobby_leave", "Lobby Leave")),
             ("match_start", translate("settings.snd_match_start")),
             ("tick", translate("settings.snd_tick")),
             ("turn_end", translate("settings.snd_turn_end")),
@@ -123,8 +130,72 @@ class SettingsModal(ctk.CTkToplevel):
             switch.pack(anchor="w", pady=6)
             self.toggles[key] = var
 
+    def _setup_daws_tab(self):
+        tab = self.tabview.tab(translate("settings.tab_daws"))
+
+        daw_frame = ctk.CTkFrame(tab, fg_color="#2D3436", corner_radius=8)
+        daw_frame.pack(fill="x", padx=10, pady=(10, 15))
+
+        header = ctk.CTkLabel(daw_frame, text="FL Studio", font=("Helvetica", 16, "bold"))
+        header.pack(anchor="w", padx=15, pady=(10, 5))
+
+        path_frame = ctk.CTkFrame(daw_frame, fg_color="transparent")
+        path_frame.pack(fill="x", padx=15, pady=(0, 15))
+
+        self.lbl_daw_icon = ctk.CTkLabel(path_frame, text="🎹", font=("Helvetica", 24))
+        self.lbl_daw_icon.pack(side="left", padx=(0, 10))
+
+        self.lbl_daw_status = ctk.CTkLabel(path_frame, text="❌", font=("Helvetica", 18))
+        self.lbl_daw_status.pack(side="left", padx=(0, 10))
+
+        self.entry_daw_path = ctk.CTkEntry(path_frame, fg_color="#1e1e1e", text_color="gray", state="disabled")
+        self.entry_daw_path.pack(side="left", padx=(0, 10), fill="x", expand=True)
+
+        btn_browse = ctk.CTkButton(path_frame, text=translate("settings.btn_browse"), width=80,
+                                   fg_color="#3a7ebf", hover_color="#1f538d", command=self._browse_fl_studio)
+        btn_browse.pack(side="right")
+
+        self._update_daw_status(self._temp_fl_path)
+
+    def _browse_fl_studio(self):
+        initial = os.path.dirname(self._temp_fl_path) if os.path.exists(self._temp_fl_path) else "C:\\"
+        path = filedialog.askopenfilename(
+            title="FL Studio.exe auswählen",
+            initialdir=initial,
+            filetypes=[("Executable", "*.exe"), ("All Files", "*.*")]
+        )
+        if path:
+            self._update_daw_status(path)
+
+    def _update_daw_status(self, path):
+        self._temp_fl_path = path
+
+        self.entry_daw_path.configure(state="normal")
+        self.entry_daw_path.delete(0, 'end')
+
+        if path:
+            self.entry_daw_path.insert(0, path)
+        else:
+            self.entry_daw_path.insert(0, translate("settings.status_missing"))
+
+        self.entry_daw_path.configure(state="disabled")
+
+        if path and os.path.exists(path) and path.lower().endswith(".exe"):
+            self.lbl_daw_status.configure(text="✅", text_color="#1DB954")
+
+            img = extract_exe_icon(path)
+            if img:
+                ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(32, 32))
+                self.lbl_daw_icon.configure(image=ctk_img, text="")
+            else:
+                self.lbl_daw_icon.configure(image=None, text="🎹")
+        else:
+            self.lbl_daw_status.configure(text="❌", text_color="#c0392b")
+            self.lbl_daw_icon.configure(image=None, text="🎹")
+
     def save_and_close(self):
         self.prefs["ui_mode"] = self.mode_var.get()
+        self.prefs["fl_studio_path"] = self._temp_fl_path
 
         selected_lang_name = self.lang_var.get()
         new_lang_code = self.lang_map.get(selected_lang_name, "en")
@@ -137,11 +208,11 @@ class SettingsModal(ctk.CTkToplevel):
             self.prefs["sounds"][key] = var.get()
 
         save_prefs(self.prefs)
-        EventBus.emit("SETTINGS_UPDATED")
+        EventBus.emit(UIEvents.SETTINGS_UPDATED)
 
         if lang_changed:
             Translator.initialize()
-            EventBus.emit("LANGUAGE_CHANGED")
+            EventBus.emit(UIEvents.LANGUAGE_CHANGED)
 
         if self.on_save_callback:
             self.on_save_callback()

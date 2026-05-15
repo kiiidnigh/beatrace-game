@@ -7,6 +7,7 @@ from core.match_controller import MatchController
 from services.daw_service import DAWService
 from services.sync_service import SyncService
 from services.timeline_service import TimelineService
+from services.match_export_service import MatchExportService
 from utils.file_utils import get_template_path
 from core.i18n import translate
 
@@ -21,7 +22,11 @@ class MatchManager:
         self.daw_service = DAWService()
         self.sync_service = SyncService(self.game_state.local_project_path)
         self.timeline_service = TimelineService(self.game_state.local_match_dir, self.game_state.is_host)
-        self.match_controller = MatchController(self.game_state, self.network, self.router)
+
+        # OCP: Dem Controller wird nicht mehr der Router übergeben
+        self.match_controller = MatchController(self.game_state, self.network)
+
+        self.match_export_service = MatchExportService(self.game_state)
 
         self._listeners = {
             "DAW_LAUNCH_SUCCESS": self._on_daw_started,
@@ -47,6 +52,7 @@ class MatchManager:
         self.daw_service.cleanup()
         self.sync_service.cleanup()
         self.timeline_service.cleanup()
+        self.match_export_service.cleanup()
 
     def start_match(self):
         EventBus.emit("STATE_MATCH_STARTED", data={"note": "Spiel gestartet, Initialisierung läuft"})
@@ -69,7 +75,8 @@ class MatchManager:
             })
         else:
             EventBus.emit("UI_STATUS_UPDATE",
-                          data={"text": translate("status.download_done_waiting").format(player=next_player), "color": "gray"})
+                          data={"text": translate("status.download_done_waiting").format(player=next_player),
+                                "color": "gray"})
 
     def _on_daw_started(self, data):
         EventBus.emit("UX_START_TURN")

@@ -9,17 +9,35 @@ import logging
 import struct
 from collections import Counter
 from core.i18n import translate
+from core.event_bus import EventBus
+from services.base_service import BaseService
 
 try:
     import pyflp
+
     HAS_PYFLP = True
 except ImportError:
     HAS_PYFLP = False
 
 
-class FLPAnalyzerService:
-    @staticmethod
-    def _extract_bpm_raw(flp_path):
+class FLPAnalyzerService(BaseService):
+    def __init__(self):
+        super().__init__()
+
+        self._listeners = {
+            "CMD_ANALYZE_MATCH": self._handle_analyze_match
+        }
+        self.register_listeners()
+
+    def _handle_analyze_match(self, data):
+        game_state = data.get("game_state")
+        if game_state:
+            logging.info("[Analyzer] Starte asynchrone Match-Analyse...")
+            stats = self.analyze_match(game_state)
+            game_state.match_stats = stats
+            EventBus.emit("STATE_ANALYSIS_COMPLETE")
+
+    def _extract_bpm_raw(self, flp_path):
         """Kugelsichere Hex-Sniper Methode für die BPM."""
         try:
             with open(flp_path, 'rb') as f:
@@ -43,8 +61,7 @@ class FLPAnalyzerService:
 
         return None
 
-    @staticmethod
-    def analyze_match(game_state):
+    def analyze_match(self, game_state):
         stats = {
             "fl_version": translate("common.unknown"),
             "file_size": "0.00 MB",
@@ -116,7 +133,8 @@ class FLPAnalyzerService:
                     valid_turns = [tr for tr in turn_durations if tr[1] > 2.0]
                     if valid_turns:
                         fastest = min(valid_turns, key=lambda x: x[1])
-                        desc = translate("analyzer.award_hot_potato_desc").format(player=fastest[0], secs=int(fastest[1]))
+                        desc = translate("analyzer.award_hot_potato_desc").format(player=fastest[0],
+                                                                                  secs=int(fastest[1]))
                         stats["awards"][translate("analyzer.award_hot_potato_title")] = desc
 
                     slowest = max(turn_durations, key=lambda x: x[1])
@@ -172,7 +190,7 @@ class FLPAnalyzerService:
                         if flp_files:
                             flp_path = os.path.join(temp_dir, flp_files[0])
 
-                            raw_bpm = FLPAnalyzerService._extract_bpm_raw(flp_path)
+                            raw_bpm = self._extract_bpm_raw(flp_path)
                             stats["project_data"][translate("analyzer.data_bpm")] = raw_bpm if raw_bpm else "140.0"
 
                             project = pyflp.parse(flp_path)

@@ -4,50 +4,44 @@
 import logging
 from utils.file_utils import load_social, save_social
 from core.event_bus import EventBus
+from services.base_service import BaseService
 
+class FriendService(BaseService):
+    def __init__(self):
+        super().__init__()
+        self._social_data = load_social()
+        if "friends" not in self._social_data:
+            self._social_data["friends"] = {}
+        self.register_listeners()
 
-class FriendService:
-    @staticmethod
-    def get_friends():
-        return load_social().get("friends", {})
+    def _save(self):
+        save_social(self._social_data)
 
-    @staticmethod
-    def add_friend(name, identity_string):
-        """Wird aufgerufen, wenn eine Freundschaftsanfrage AKZEPTIERT wurde."""
+    def get_friends(self):
+        return self._social_data.get("friends", {})
+
+    def add_friend(self, name, identity_string):
         if "#" not in identity_string:
             return False
-
         pub_id, token = identity_string.split("#", 1)
-        social_data = load_social()
-
-        if "friends" not in social_data:
-            social_data["friends"] = {}
-
-        social_data["friends"][pub_id] = {"name": name, "token": token}
-        save_social(social_data)
-
+        self._social_data["friends"][pub_id] = {"name": name, "token": token}
+        self._save()
         logging.info(f"[FriendService] Freund '{name}' ({pub_id}) hinzugefügt/aktualisiert.")
         EventBus.emit("SOCIAL_FRIENDS_UPDATED")
         return True
 
-    @staticmethod
-    def update_friend_name(pub_id, new_name):
-        """Wird aufgerufen, wenn über MQTT ein neuer Name empfangen wird."""
-        social_data = load_social()
-        friends = social_data.get("friends", {})
-
+    def update_friend_name(self, pub_id, new_name):
+        friends = self._social_data["friends"]
         if pub_id in friends and friends[pub_id].get("name") != new_name:
             old_name = friends[pub_id].get("name")
             friends[pub_id]["name"] = new_name
-            save_social(social_data)
+            self._save()
             logging.info(f"[FriendService] Freund hat Namen geändert: {old_name} -> {new_name}")
             EventBus.emit("SOCIAL_FRIENDS_UPDATED")
 
-    @staticmethod
-    def remove_friend(pub_id):
-        social_data = load_social()
-        if "friends" in social_data and pub_id in social_data["friends"]:
-            del social_data["friends"][pub_id]
-            save_social(social_data)
+    def remove_friend(self, pub_id):
+        if pub_id in self._social_data["friends"]:
+            del self._social_data["friends"][pub_id]
+            self._save()
             logging.info(f"[FriendService] Freund entfernt: {pub_id}")
             EventBus.emit("SOCIAL_FRIENDS_UPDATED")

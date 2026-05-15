@@ -4,45 +4,44 @@
 import customtkinter as ctk
 from utils.file_utils import load_prefs
 from core.event_bus import EventBus
+from core.events import StateEvents, CmdEvents, UIEvents, SysEvents, NetEvents
 from core.match_manager import MatchManager
 from services.ux_service import UXService
 from core.i18n import translate
 from ui.components.custom_popup import CustomPopup
+from ui.views.base_view import BaseView
 
 
-class GameView(ctk.CTkFrame):
+class GameView(BaseView):
     def __init__(self, master, game_state, network, router=None, **kwargs):
-        super().__init__(master)
+        super().__init__(master, **kwargs)
         self.game_state = game_state
         self.network = network
         self.router = router
         self.player_labels = {}
 
-        self._is_destroyed = False
-
         ui_mode = load_prefs().get("ui_mode", "Standard")
         self.ux_service = UXService(ui_mode, self.winfo_toplevel(), self.game_state)
-
         self.match_manager = MatchManager(self.game_state, self.network, self.router)
 
+        # Typisierte Events verwenden (Fail Fast!)
         self._listeners = {
-            "STATE_TURN_START": lambda d: self.safe_execute(self._apply_turn_start, d),
-            "STATE_PAUSED": lambda d: self.safe_execute(self._apply_pause, d),
-            "STATE_RESUMED": lambda d: self.safe_execute(self._apply_resume, d),
-            "STATE_TIMER_TICK": lambda d: self.safe_execute(self._apply_timer_tick, d),
-            "STATE_TIME_UP": lambda d: self.safe_execute(self._apply_time_up),
-            "STATE_GAME_OVER": lambda d: self.safe_execute(self._apply_game_over),
-            "STATE_TURN_END": lambda d: self.safe_execute(self._apply_turn_end, d),
-            "STATE_ELIMINATED": lambda d: self.safe_execute(self._apply_eliminated, d),
-            "UI_STATUS_UPDATE": lambda d: self.safe_execute(
-                lambda: self.status_label.configure(text=d.get("text"), text_color=d.get("color", "white"))),
-            "DAW_RESUME_CLICK_DETECTED": lambda d: self.safe_execute(self._apply_resume_click),
-            "LANGUAGE_CHANGED": lambda d: self.safe_execute(self.update_texts),
-            "NET_LOBBY_CLOSED": lambda d: self.safe_execute(self._on_host_closed_match)
+            StateEvents.TURN_START: self._apply_turn_start,
+            StateEvents.PAUSED: self._apply_pause,
+            StateEvents.RESUMED: self._apply_resume,
+            StateEvents.TIMER_TICK: self._apply_timer_tick,
+            StateEvents.TIME_UP: self._apply_time_up,
+            StateEvents.GAME_OVER: self._apply_game_over,
+            StateEvents.TURN_END: self._apply_turn_end,
+            StateEvents.ELIMINATED: self._apply_eliminated,
+            UIEvents.STATUS_UPDATE: lambda d: self.status_label.configure(text=d.get("text"), text_color=d.get("color", "white")),
+            "DAW_RESUME_CLICK_DETECTED": self._apply_resume_click,  # (Beispielhaft als String gelassen, falls noch nicht ausgelagert, aber idealerweise auch ins Dictionary aufnehmen!)
+            UIEvents.LANGUAGE_CHANGED: self.update_texts,
+            NetEvents.LOBBY_CLOSED: self._on_host_closed_match
         }
-        self._setup_event_listeners()
-        self.setup_ui()
+        self.register_listeners()
 
+        self.setup_ui()
         self._ui_tick()
         self.match_manager.start_match()
 
@@ -50,29 +49,11 @@ class GameView(ctk.CTkFrame):
             msg = translate("game.status_started_other").format(player=self.game_state.players[0])
             self.status_label.configure(text=msg, text_color="white")
 
-    def safe_execute(self, func, *args):
-        def wrapper():
-            if not self._is_destroyed and self.winfo_exists():
-                try:
-                    func(*args)
-                except Exception:
-                    pass
-
-        self.after(0, wrapper)
-
-    def _setup_event_listeners(self):
-        for event, func in self._listeners.items():
-            EventBus.subscribe(event, func)
-
     def destroy(self):
-        self._is_destroyed = True
-        for event, func in self._listeners.items():
-            EventBus.unsubscribe(event, func)
         self.match_manager.cleanup()
-        self.pack_forget()
-        self.after(100, lambda: ctk.CTkFrame.destroy(self))
+        super().destroy()
 
-    def update_texts(self):
+    def update_texts(self, data=None):
         self.lbl_title.configure(text=translate("game.title"))
         self.btn_leave.configure(text=translate("common.btn_leave"))
         if self.btn_pause.winfo_ismapped() and "PAUSE" in self.btn_pause.cget("text"):
@@ -105,36 +86,30 @@ class GameView(ctk.CTkFrame):
             lbl.pack(pady=15, padx=40)
             self.player_labels[player] = lbl
 
-        # Eine feste Höhe für den Control-Frame verhindert, dass das Layout springt, wenn der Button verschwindet
         self.control_frame = ctk.CTkFrame(self, fg_color="transparent", height=50)
         self.control_frame.pack_propagate(False)
         self.control_frame.pack(fill="x", side="bottom", pady=(10, 30))
 
         self.btn_pause = ctk.CTkButton(self.control_frame, text=translate("game.btn_pause"), width=250, height=50,
                                        font=("Helvetica", 16, "bold"),
-                                       command=lambda: EventBus.emit("CMD_TOGGLE_PAUSE"))
-
-        # Startet initial versteckt
+                                       command=lambda: EventBus.emit(CmdEvents.TOGGLE_PAUSE))
         self.btn_pause.pack_forget()
 
     def _ui_tick(self):
         if getattr(self, '_is_destroyed', False) or not self.winfo_exists():
             return
-        EventBus.emit("SYS_TICK")
+        EventBus.emit(SysEvents.TICK)
         self.update_ui_text()
         self.after(100, self._ui_tick)
 
     def _apply_turn_start(self, data):
         player = data.get("player")
-
         if player == self.game_state.my_name:
             self.btn_pause.configure(state="normal", text=translate("game.btn_pause"), fg_color=["#3a7ebf", "#1f538d"])
-            # Button einblenden, wenn wir am Zug sind
             if not self.btn_pause.winfo_ismapped():
                 self.btn_pause.pack(expand=True)
             self.status_label.configure(text=translate("game.status_your_turn"), text_color="#1DB954")
         else:
-            # Button verstecken, wenn die anderen am Zug sind
             if self.btn_pause.winfo_ismapped():
                 self.btn_pause.pack_forget()
             self.status_label.configure(text=translate("game.status_other_turn").format(player=player),
@@ -145,7 +120,7 @@ class GameView(ctk.CTkFrame):
         if player == self.game_state.my_name:
             msg = translate("game.btn_resume").format(penalty=self.game_state.penalty_seconds)
             self.btn_pause.configure(text=msg, fg_color="#e67e22", state="disabled")
-            self.after(500, lambda: EventBus.emit("CMD_WAIT_RESUME_CLICK"))
+            self.after(500, lambda: EventBus.emit(CmdEvents.WAIT_RESUME_CLICK))
         self.status_label.configure(text=translate("game.status_paused"), text_color="#e67e22")
 
     def _apply_resume(self, data):
@@ -161,35 +136,32 @@ class GameView(ctk.CTkFrame):
             self.status_label.configure(text=translate("game.status_other_turn").format(player=player),
                                         text_color="white")
 
-    def _apply_resume_click(self):
+    def _apply_resume_click(self, data=None):
         if self.match_manager.match_controller.is_paused:
-            EventBus.emit("CMD_TOGGLE_PAUSE")
+            EventBus.emit(CmdEvents.TOGGLE_PAUSE)
 
     def _apply_timer_tick(self, data):
         time_str = self.match_manager.match_controller.format_time(data.get("time_left"))
         self.ux_service.update_during_turn(time_str, data.get("time_left"), data.get("is_paused"))
 
-    def _apply_time_up(self):
+    def _apply_time_up(self, data=None):
         self.btn_pause.configure(state="disabled")
 
-    def _apply_game_over(self):
-        EventBus.emit("UX_END_TURN")
+    def _apply_game_over(self, data=None):
+        EventBus.emit(UIEvents.UX_END_TURN)
         if self.btn_pause.winfo_ismapped():
             self.btn_pause.pack_forget()
         self.status_label.configure(text=translate("game.status_game_over"), text_color="#1DB954")
 
     def _apply_turn_end(self, data):
-        # FIX: Nur den lokalen Status umschalten, wenn wir selbst abgegeben haben
         if data.get("player") == self.game_state.my_name:
             self.status_label.configure(text=translate("game.status_turn_ended"), text_color="orange")
 
     def _apply_eliminated(self, data):
-        # FIX: Nur den lokalen Status umschalten, wenn wir selbst ausgeschieden sind
         if data.get("player") == self.game_state.my_name:
             self.status_label.configure(text=translate("game.status_eliminated"), text_color="red")
 
-    def _on_host_closed_match(self):
-        """Wenn der Host mitten im Game das Spiel verlässt, kicken wir den Client sicher raus."""
+    def _on_host_closed_match(self, data=None):
         self.network.disconnect()
         self.game_state.reset_match_data()
 
@@ -208,8 +180,7 @@ class GameView(ctk.CTkFrame):
         )
 
     def leave_game(self):
-        EventBus.emit("UX_END_TURN")
-
+        EventBus.emit(UIEvents.UX_END_TURN)
         if self.game_state.is_host:
             self.network.send_signal("LOBBY_CLOSED")
         else:
@@ -219,13 +190,10 @@ class GameView(ctk.CTkFrame):
         if self.router: self.router.show_home()
 
     def update_ui_text(self):
-        # FIX: Wir iterieren über die Labels, NICHT über game_state.players,
-        # da der MatchController den Spieler aus der Liste löscht, wenn er verlässt.
         for player, label in self.player_labels.items():
             time_left = self.game_state.get_player_time(player)
             bonus_str = self.game_state.get_bonus_text(player)
 
-            # Spieler wurde eliminiert ODER hat das Spiel komplett verlassen
             if player in self.game_state.eliminated_players or player not in self.game_state.players:
                 label.configure(text=f"❌ {player}: {self.match_manager.match_controller.format_time(time_left)}",
                                 text_color="#c0392b")

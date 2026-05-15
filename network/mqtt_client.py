@@ -14,7 +14,7 @@ class NetworkManager:
         self.client_id = str(uuid.uuid4())
         self.topic = ""
 
-        self.client = mqtt.Client()
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
 
@@ -32,7 +32,7 @@ class NetworkManager:
             except Exception as e:
                 logging.error(f"[Network] Konnte nicht mit dem Netzwerk verbinden: {e}")
 
-    def _on_connect(self, client, userdata, flags, rc):
+    def _on_connect(self, client, userdata, flags, reason_code, properties):
         logging.info(f"[Network] [{self.my_name}] Erfolgreich verbunden! Betrete Raum: {self.room_code}")
         self.client.subscribe(self.topic)
         EventBus.emit("NET_CONNECTED")

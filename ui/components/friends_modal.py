@@ -3,10 +3,9 @@
 # ================================================
 import json
 import customtkinter as ctk
-from services.friend_service import FriendService
-from services.identity_service import IdentityService
 from utils.ui_utils import get_centered_geometry
 from core.event_bus import EventBus
+from core.events import SocialEvents, CmdEvents
 
 
 class FriendsModal(ctk.CTkToplevel):
@@ -14,15 +13,17 @@ class FriendsModal(ctk.CTkToplevel):
         super().__init__(master)
         self.title("Deine Freunde")
         self.geometry(get_centered_geometry(master, width=500, height=600))
-        self.attributes('-topmost', True)
         self.resizable(False, False)
+
+        # Bindet sich an das Hauptfenster (minimiert sich mit ihm)
+        # Kein grab_set(), damit das Hauptfenster klickbar bleibt
         self.transient(master)
-        self.grab_set()
 
         self.master_window = master
         self.game_state = game_state
+        self.app_core = master.app_core
 
-        self.my_id = IdentityService.get_or_create_id()
+        self.my_id = self.app_core.identity_service.get_or_create_id()
 
         # --- Eigener Freundescode Bereich ---
         top_frame = ctk.CTkFrame(self, fg_color="#1e1e1e")
@@ -40,7 +41,6 @@ class FriendsModal(ctk.CTkToplevel):
         id_entry.configure(state="readonly")
         id_entry.pack(side="left", padx=(0, 10))
 
-        # NEU: Der Copy-Button
         self.copy_btn = ctk.CTkButton(id_frame, text="📋 Kopieren", width=100, fg_color="#333333",
                                       hover_color="#555555", command=self._copy_to_clipboard)
         self.copy_btn.pack(side="left")
@@ -60,24 +60,19 @@ class FriendsModal(ctk.CTkToplevel):
         self.scroll_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Live-Updates abonnieren
-        self._update_callback = lambda d=None: self.after(0, self._populate_list)
-        EventBus.subscribe("SOCIAL_FRIENDS_UPDATED", self._update_callback)
-        EventBus.subscribe("SOCIAL_FRIEND_STATUS", self._update_callback)
+        EventBus.subscribe_ui(self, SocialEvents.FRIENDS_UPDATED, self._populate_list)
+        EventBus.subscribe_ui(self, SocialEvents.FRIEND_STATUS, self._populate_list)
 
         self._populate_list()
 
     def destroy(self):
-        # Event-Listener sauber abmelden!
-        EventBus.unsubscribe("SOCIAL_FRIENDS_UPDATED", self._update_callback)
-        EventBus.unsubscribe("SOCIAL_FRIEND_STATUS", self._update_callback)
+        EventBus.unsubscribe_ui(SocialEvents.FRIENDS_UPDATED, self._populate_list)
+        EventBus.unsubscribe_ui(SocialEvents.FRIEND_STATUS, self._populate_list)
         super().destroy()
 
     def _copy_to_clipboard(self):
-        """Kopiert die ID in die Zwischenablage und gibt visuelles Feedback."""
         self.clipboard_clear()
         self.clipboard_append(self.my_id)
-
         self.copy_btn.configure(text="✅ Kopiert!", fg_color="#1DB954")
         self.after(2000, lambda: self.copy_btn.configure(text="📋 Kopieren", fg_color="#333333"))
 
@@ -89,8 +84,8 @@ class FriendsModal(ctk.CTkToplevel):
             return
 
         target_pub_id = target_identity.split("#")[0]
-        my_identity = IdentityService.get_or_create_id()
-        my_name = IdentityService.get_display_name()
+        my_identity = self.app_core.identity_service.get_or_create_id()
+        my_name = self.app_core.identity_service.get_display_name()
 
         payload = json.dumps({
             "type": "friend_request",
@@ -99,34 +94,31 @@ class FriendsModal(ctk.CTkToplevel):
         })
 
         topic = f"beatrace/social/{target_pub_id}/inbox"
-        if hasattr(self.master_window, 'presence_service'):
-            self.master_window.presence_service.client.publish(topic, payload, qos=1)
+        EventBus.emit(CmdEvents.SEND_SOCIAL_MESSAGE, {"topic": topic, "payload": payload})
 
         self.add_entry.delete(0, 'end')
         self.add_btn.configure(text="Gesendet!", fg_color="#1DB954", state="disabled")
         self.after(2000, lambda: self.add_btn.configure(text="Anfrage senden", state="normal"))
 
-    def _populate_list(self):
+    def _populate_list(self, data=None):
         if not hasattr(self, 'scroll_frame') or not self.scroll_frame.winfo_exists():
             return
 
         for widget in self.scroll_frame.winfo_children():
             widget.destroy()
 
-        friends = FriendService.get_friends()
+        friends = self.app_core.friend_service.get_friends()
         if not friends:
             ctk.CTkLabel(self.scroll_frame, text="Du hast noch keine Freunde hinzugefügt.", text_color="gray").pack(
                 pady=20)
             return
-
-        game_state = self.game_state
 
         for pub_id, data in friends.items():
             f_frame = ctk.CTkFrame(self.scroll_frame, fg_color="#2a2a2a")
             f_frame.pack(fill="x", pady=5)
 
             name = data.get("name", "Unbekannt")
-            is_online = pub_id in game_state.online_friends if game_state else False
+            is_online = pub_id in self.game_state.online_friends if self.game_state else False
 
             color = "#1DB954" if is_online else "gray"
             status = "Online" if is_online else "Offline"
@@ -138,16 +130,14 @@ class FriendsModal(ctk.CTkToplevel):
                           command=lambda pid=pub_id: self._remove_friend(pid)).pack(side="right", padx=10)
 
     def _remove_friend(self, pub_id):
-        FriendService.remove_friend(pub_id)
+        self.app_core.friend_service.remove_friend(pub_id)
 
-        my_identity = IdentityService.get_or_create_id()
+        my_identity = self.app_core.identity_service.get_or_create_id()
         payload = json.dumps({
             "type": "friend_remove",
             "sender_identity": my_identity
         })
+
         topic = f"beatrace/social/{pub_id}/inbox"
-
-        if hasattr(self.master_window, 'presence_service'):
-            self.master_window.presence_service.client.publish(topic, payload, qos=1)
-
+        EventBus.emit(CmdEvents.SEND_SOCIAL_MESSAGE, {"topic": topic, "payload": payload})
         self._populate_list()

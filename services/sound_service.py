@@ -2,29 +2,24 @@
 # FILE: services/sound_service.py
 # ================================================
 import os
-import time
 import logging
 import customtkinter as ctk
 from core.event_bus import EventBus
 from utils.file_utils import load_prefs
 from config import settings
+from services.base_service import BaseService
 
 try:
     import pygame
-
     PYGAME_AVAILABLE = True
 except ImportError:
     PYGAME_AVAILABLE = False
     logging.warning("[SoundService] Pygame-CE nicht installiert. Sounds deaktiviert.")
 
 
-class SoundService:
-    """
-    Kapselt die gesamte Audio-Logik. Reagiert über den Event-Bus auf das Spielgeschehen
-    und injiziert sich direkt in die CustomTkinter UI.
-    """
-
+class SoundService(BaseService):
     def __init__(self):
+        super().__init__()
         self.sounds = {}
         self.last_tick_step = -1
 
@@ -32,8 +27,6 @@ class SoundService:
 
         if PYGAME_AVAILABLE:
             try:
-                # PROFESIONELLER FIX: Feste Buffer- und Frequenz-Werte für Windows-Konsistenz!
-                # 44100 Hz (CD-Qualität), -16 (16-bit signed Audio), 1 (Mono), 512 (sehr niedrige Latenz)
                 pygame.mixer.pre_init(frequency=44100, size=-16, channels=1, buffer=512)
                 pygame.mixer.init()
 
@@ -53,11 +46,9 @@ class SoundService:
             "STATE_GAME_OVER": lambda d: self.play("match_finish"),
             "SETTINGS_UPDATED": self._reload_settings
         }
-        for evt, cb in self._listeners.items():
-            EventBus.subscribe(evt, cb)
+        self.register_listeners()
 
     def _monkeypatch_ctk_buttons(self):
-        """Klinkt sich tief in CustomTkinter ein, damit wirklich JEDER Button einen Klick-Sound macht."""
         original_clicked = ctk.CTkButton._clicked
         service_ref = self
 
@@ -103,7 +94,6 @@ class SoundService:
     def play(self, sound_key):
         if not PYGAME_AVAILABLE: return
 
-        # Der UI-Toggle heißt nur "tick", steuert aber alle 3 Tick-Versionen
         pref_key = "tick" if sound_key.startswith("tick") else sound_key
         if not self.prefs.get(pref_key, True): return
 
@@ -118,21 +108,18 @@ class SoundService:
         if time_left <= 0:
             return
 
-        # Dynamisches Intervall für den Eskalations-Effekt
         if time_left <= 3.0:
-            interval = 0.25  # Sehr schnell, höchste Tonhöhe
+            interval = 0.25
             tick_sound = "tick_3"
         elif time_left <= 6.0:
-            interval = 0.5  # Mittel schnell, mittlere Tonhöhe
+            interval = 0.5
             tick_sound = "tick_2"
         elif time_left <= 10.0:
-            interval = 1.0  # 1x pro Sekunde, normale Tonhöhe
+            interval = 1.0
             tick_sound = "tick_1"
         else:
             return
 
-        # Da die Ticks aus der Mainloop in Bruchteilen von Sekunden kommen,
-        # prüfen wir hier, ob wir den nächsten Takt/Intervallschritt erreicht haben.
         current_step = int(time_left / interval)
         if current_step != self.last_tick_step:
             self.last_tick_step = current_step

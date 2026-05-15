@@ -5,35 +5,27 @@ import customtkinter as ctk
 import os
 import subprocess
 from core.i18n import translate
-from core.event_bus import EventBus
 from ui.components.custom_popup import CustomPopup
+from ui.views.base_view import BaseView
 
 
-class FinishView(ctk.CTkFrame):
-    def __init__(self, master, game_state, network, router):
-        super().__init__(master)
+class FinishView(BaseView):
+    def __init__(self, master, game_state, network, router, **kwargs):
+        super().__init__(master, **kwargs)
         self.game_state = game_state
         self.network = network
         self.router = router
         self.match_stats = self.game_state.match_stats
 
-        self._is_destroyed = False
-        self._lobby_closed_by_host = False  # NEU: Merkt sich, ob die Lobby im Hintergrund geschlossen wurde
+        self._lobby_closed_by_host = False
+
+        self._listeners = {
+            "LANGUAGE_CHANGED": lambda d: self.safe_execute(self.update_texts),
+            "NET_LOBBY_CLOSED": lambda d: self.safe_execute(self._on_host_closed_lobby)
+        }
+        self.register_listeners()
 
         self.setup_ui()
-        EventBus.subscribe("LANGUAGE_CHANGED", self._on_language_changed)
-        EventBus.subscribe("NET_LOBBY_CLOSED", self._on_host_closed_lobby)
-
-    def destroy(self):
-        self._is_destroyed = True
-        EventBus.unsubscribe("LANGUAGE_CHANGED", self._on_language_changed)
-        EventBus.unsubscribe("NET_LOBBY_CLOSED", self._on_host_closed_lobby)
-        self.pack_forget()
-        self.after(100, lambda: ctk.CTkFrame.destroy(self))
-
-    def _on_language_changed(self, data=None):
-        if not self._is_destroyed and self.winfo_exists():
-            self.update_texts()
 
     def update_texts(self):
         self.lbl_title.configure(text=translate("finish.title"))
@@ -116,16 +108,8 @@ class FinishView(ctk.CTkFrame):
                                        fg_color="#3a7ebf", hover_color="#1f538d", command=self.return_to_lobby)
         self.btn_lobby.pack(side="left", padx=10)
 
-    def _on_host_closed_lobby(self, data=None):
-        """Wird getriggert, wenn der Host die Lobby schließt. Wir merken uns das nur heimlich."""
-
-        def handle_close():
-            if self._is_destroyed or not self.winfo_exists():
-                return
-            # Statt den Spieler sofort rauszuwerfen, merken wir uns nur, dass die Lobby zu ist.
-            self._lobby_closed_by_host = True
-
-        self.after(0, handle_close)
+    def _on_host_closed_lobby(self):
+        self._lobby_closed_by_host = True
 
     def _create_stat_row(self, parent, title, value):
         box = ctk.CTkFrame(parent, fg_color="#2D3436", corner_radius=8, height=60)
@@ -146,14 +130,11 @@ class FinishView(ctk.CTkFrame):
                 os.startfile(folder)
 
     def return_to_lobby(self):
-        """Wird aufgerufen, wenn der Nutzer fertig ist und auf 'Zurück zur Lobby' klickt."""
-        # Prüfen, ob der Host in der Zwischenzeit die Lobby geschlossen hat
+        from core.event_bus import EventBus
         if self._lobby_closed_by_host:
-            # Verbindung trennen und Daten bereinigen
             self.network.disconnect()
             self.game_state.reset_match_data()
 
-            # Popup anzeigen und danach ins Hauptmenü schicken
             def on_close():
                 self.router.show_home()
 
@@ -168,5 +149,4 @@ class FinishView(ctk.CTkFrame):
                 on_cancel_callback=on_close
             )
         else:
-            # Normale Rückkehr in die Lobby (Host ist noch da)
             EventBus.emit("CMD_RETURN_TO_LOBBY")

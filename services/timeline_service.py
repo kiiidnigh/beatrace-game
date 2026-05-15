@@ -1,12 +1,16 @@
+# ================================================
+# FILE: services/timeline_service.py
+# ================================================
 import os
 import time
 import csv
 import logging
 from core.event_bus import EventBus
+from services.base_service import BaseService
 
-
-class TimelineService:
+class TimelineService(BaseService):
     def __init__(self, match_dir, is_host):
+        super().__init__()
         self.match_dir = match_dir
         self.is_host = is_host
         self.filepath = os.path.join(self.match_dir, "timeline.csv")
@@ -25,15 +29,7 @@ class TimelineService:
             "STATE_FINISHED": lambda d: self.log_event("FINISHED", d.get("player"), d.get("time_left", 0), d.get("note", "")),
             "STATE_GAME_OVER": lambda d: self.log_event("GAME_OVER", note=d.get("note", ""))
         }
-        self._setup_subscriptions()
-
-    def _setup_subscriptions(self):
-        for event, func in self._listeners.items():
-            EventBus.subscribe(event, func)
-
-    def cleanup(self):
-        for event, func in self._listeners.items():
-            EventBus.unsubscribe(event, func)
+        self.register_listeners()
 
     def _ensure_file_exists(self):
         try:

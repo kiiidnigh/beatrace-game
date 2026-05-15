@@ -2,12 +2,12 @@
 # FILE: ui/views/setup_view.py
 # ================================================
 import customtkinter as ctk
-from services.identity_service import IdentityService
+from ui.views.base_view import BaseView
 
 
-class SetupView(ctk.CTkFrame):
-    def __init__(self, master, game_state, network, router):
-        super().__init__(master, fg_color="transparent")
+class SetupView(BaseView):
+    def __init__(self, master, game_state, network, router, **kwargs):
+        super().__init__(master, fg_color="transparent", **kwargs)
         self.router = router
         self.game_state = game_state
 
@@ -34,7 +34,6 @@ class SetupView(ctk.CTkFrame):
                                  command=self.save_profile)
         btn_save.pack(pady=20)
 
-        # Enter-Taste abfangen
         self.entry_name.bind("<Return>", lambda e: self.save_profile())
 
     def save_profile(self):
@@ -44,14 +43,9 @@ class SetupView(ctk.CTkFrame):
             self.lbl_error.configure(text="Dein Name muss mindestens 3 Zeichen lang sein.")
             return
 
-        # 1. Namen speichern
-        IdentityService.set_display_name(name)
-
-        # 2. Im GameState hinterlegen (für MQTT & Co.)
+        # Nutze die injizierten Services
+        self.router.app_core.identity_service.set_display_name(name)
         self.game_state.my_name = name
+        self.router.app_core.identity_service.get_or_create_id()
 
-        # 3. ID initialisieren, damit sie feststeht
-        IdentityService.get_or_create_id()
-
-        # 4. Ab ins Spiel!
         self.router.show_home()

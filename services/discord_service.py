@@ -7,11 +7,11 @@ import threading
 from pypresence import Presence
 from core.event_bus import EventBus
 from config.settings import DISCORD_APP_ID
+from services.base_service import BaseService
 
-class DiscordService:
-
-
+class DiscordService(BaseService):
     def __init__(self):
+        super().__init__()
         self.rpc = None
         self._is_connected = False
         self._current_state = "Idle"
@@ -23,14 +23,10 @@ class DiscordService:
             "NET_CONNECTED": lambda d: self.update_presence("In Lobby", "Waiting for Players"),
             "NET_LOBBY_CLOSED": lambda d: self.update_presence("In Menus", "Idle")
         }
+        self.register_listeners()
 
         # Startet die Verbindung in einem eigenen Thread, um UI-Blocking zu vermeiden
         threading.Thread(target=self._connect, daemon=True).start()
-        self._setup_subscriptions()
-
-    def _setup_subscriptions(self):
-        for event, func in self._listeners.items():
-            EventBus.subscribe(event, func)
 
     def _connect(self):
         try:
@@ -54,7 +50,7 @@ class DiscordService:
             self.rpc.update(
                 state=state,
                 details=details,
-                large_image="logo_large",  # Muss im Discord Developer Portal hochgeladen werden
+                large_image="logo_large",
                 large_text="Beatrace Game",
                 start=time.time() if state == "In Game" else None,
                 party_id="beatrace_session" if party_size else None,
@@ -64,8 +60,7 @@ class DiscordService:
             logging.error(f"[DiscordService] Update fehlgeschlagen: {e}")
 
     def cleanup(self):
-        for event, func in self._listeners.items():
-            EventBus.unsubscribe(event, func)
+        super().cleanup()
         if self.rpc:
             try:
                 self.rpc.close()

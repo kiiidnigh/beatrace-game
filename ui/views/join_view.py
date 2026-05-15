@@ -7,12 +7,12 @@ import os
 from utils.file_utils import load_prefs, save_prefs
 from config import settings
 from core.i18n import translate
-from core.event_bus import EventBus
+from ui.views.base_view import BaseView
 
 
-class JoinView(ctk.CTkFrame):
-    def __init__(self, master, game_state, network, router):
-        super().__init__(master)
+class JoinView(BaseView):
+    def __init__(self, master, game_state, network, router, **kwargs):
+        super().__init__(master, **kwargs)
         self.game_state = game_state
         self.network = network
         self.router = router
@@ -21,16 +21,12 @@ class JoinView(ctk.CTkFrame):
         self.prefs = load_prefs()
         self.selected_folder = self.prefs.get("last_join_folder", "")
 
+        self._listeners = {
+            "LANGUAGE_CHANGED": lambda d: self.safe_execute(self.update_texts)
+        }
+        self.register_listeners()
+
         self.setup_ui()
-        EventBus.subscribe("LANGUAGE_CHANGED", self._on_language_changed)
-
-    def destroy(self):
-        EventBus.unsubscribe("LANGUAGE_CHANGED", self._on_language_changed)
-        self.pack_forget()
-        self.after(100, lambda: ctk.CTkFrame.destroy(self))
-
-    def _on_language_changed(self, data=None):
-        self.after(0, self.update_texts)
 
     def update_texts(self):
         self.btn_back.configure(text=translate("common.btn_back"))
@@ -69,7 +65,6 @@ class JoinView(ctk.CTkFrame):
         self.code_entry = ctk.CTkEntry(form_frame, width=200, height=50, font=("Helvetica", 28, "bold"),
                                        justify="center")
 
-        # ONE-CLICK JOIN: Füllt den Code automatisch aus, falls er über eine Einladung im State gelandet ist
         if self.game_state.room_code:
             self.code_entry.insert(0, self.game_state.room_code)
 

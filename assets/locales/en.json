@@ -1,4 +1,3 @@
-
 {
     "common": {
         "btn_back": "◀ Back",
@@ -116,6 +115,7 @@
         "title": "App Settings",
         "tab_general": "General",
         "tab_sound": "Sound",
+        "tab_daws": "DAWs",
         "language_label": "Language / Sprache:",
         "ux_mode_label": "UX Mode (during your turn)",
         "ux_standard_desc": "The normal window remains open.",
@@ -129,7 +129,9 @@
         "snd_tick": "Timer Tick (Last 10s)",
         "snd_turn_end": "Turn Submitted",
         "snd_eliminated": "Player Eliminated",
-        "snd_match_finish": "Match Finish"
+        "snd_match_finish": "Match Finish",
+        "btn_browse": "Browse...",
+        "status_missing": "No path specified"
     },
     "status": {
         "opening_daw": "Opening DAW...",

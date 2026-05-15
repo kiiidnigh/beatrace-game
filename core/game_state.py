@@ -2,11 +2,10 @@
 # FILE: core/game_state.py
 # ================================================
 import os
-from services.identity_service import IdentityService
 
 
 class GameState:
-    def __init__(self):
+    def __init__(self, identity_service):
         self.players = []
         self.active_players = []
         self.my_name = ""
@@ -24,9 +23,9 @@ class GameState:
 
         self.workspace_id = ""
 
-        # NEU: Identity
-        self.my_identity = IdentityService.get_or_create_id()
-        self.my_public_id = IdentityService.get_public_id()
+        # Identity aus dem Service injiziert!
+        self.my_identity = identity_service.get_or_create_id()
+        self.my_public_id = identity_service.get_public_id()
         self.online_friends = set()
 
         self._times = {}

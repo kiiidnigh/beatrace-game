@@ -13,9 +13,9 @@ if "--profile" in sys.argv:
 import logging
 from datetime import datetime
 from config import settings
-from services.sound_service import SoundService
-from ui.main_window import MainWindow
 from core.i18n import Translator
+from core.app_core import AppCore
+from ui.main_window import MainWindow
 
 
 def setup_logging():
@@ -52,19 +52,28 @@ def setup_logging():
 if __name__ == "__main__":
     setup_logging()
     try:
-        # i18n System initialisieren, BEVOR die UI geladen wird
+        # 1. Sprache initialisieren (Settings lesen)
         Translator.initialize()
 
-        # Startet den Sound Service global.
-        # Er klinkt sich automatisch in die UI Buttons ein.
-        sound_service = SoundService()
+        # 2. Das Gehirn der App starten (Komplett ohne UI!)
+        core = AppCore()
+        core.start()
 
-        app = MainWindow()
+        # 3. Die Hülle (UI) starten und das Gehirn übergeben
+        app = MainWindow(app_core=core)
+
 
         def tk_report_exception(self, exc_type, exc_value, exc_traceback):
             logging.error("Tkinter Callback Exception", exc_info=(exc_type, exc_value, exc_traceback))
 
+
         app.report_callback_exception = tk_report_exception.__get__(app, MainWindow)
+
+        # 4. Mainloop blockiert, bis Fenster vom Nutzer geschlossen wird
         app.mainloop()
+
+        # 5. Sauberes Herunterfahren der Backend-Services nach dem Schließen der UI
+        core.stop()
+
     except Exception:
         logging.critical("Kritischer Absturz beim Start", exc_info=True)
