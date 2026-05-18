@@ -2,14 +2,16 @@
 # FILE: ui/components/settings_modal.py
 # ================================================
 import os
+import threading
 import tkinter.filedialog as filedialog
 import customtkinter as ctk
 from utils.file_utils import load_prefs, save_prefs
 from utils.os_utils import extract_exe_icon
 from utils.ui_utils import get_centered_geometry
 from core.event_bus import EventBus
-from core.events import UIEvents
+from core.events import UIEvents, SysEvents
 from core.i18n import translate, Translator
+from services.storage.rclone_adapter import RcloneCloudAdapter
 
 
 class SettingsModal(ctk.CTkToplevel):
@@ -18,9 +20,6 @@ class SettingsModal(ctk.CTkToplevel):
 
         self.title(translate("settings.title"))
         self.resizable(False, False)
-
-        # KISS: transient bindet das Fenster an den Master (minimiert sich mit)
-        # grab_set() wurde entfernt, damit das Hauptfenster minimierbar bleibt.
         self.transient(master)
 
         self.geometry(get_centered_geometry(master, width=450, height=650))
@@ -45,9 +44,13 @@ class SettingsModal(ctk.CTkToplevel):
         self.tabview.add(translate("settings.tab_sound"))
         self.tabview.add(translate("settings.tab_daws"))
 
+        # NEU: Cloud Sync Tab (SRP)
+        self.tabview.add(translate("settings.tab_cloud"))
+
         self._setup_general_tab()
         self._setup_sound_tab()
         self._setup_daws_tab()
+        self._setup_cloud_tab()
 
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(pady=20, side="bottom")
@@ -112,8 +115,8 @@ class SettingsModal(ctk.CTkToplevel):
         self.toggles = {}
         sound_options = [
             ("btn_click", translate("settings.snd_btn_click")),
-            ("lobby_join", translate("settings.lobby_join", "Lobby Join")),  # Fallback string
-            ("lobby_leave", translate("settings.lobby_leave", "Lobby Leave")),
+            ("lobby_join", translate("settings.snd_lobby_join", "Lobby Join")),
+            ("lobby_leave", translate("settings.snd_lobby_leave", "Lobby Leave")),
             ("match_start", translate("settings.snd_match_start")),
             ("tick", translate("settings.snd_tick")),
             ("turn_end", translate("settings.snd_turn_end")),
@@ -156,6 +159,45 @@ class SettingsModal(ctk.CTkToplevel):
         btn_browse.pack(side="right")
 
         self._update_daw_status(self._temp_fl_path)
+
+    def _setup_cloud_tab(self):
+        """NEU: Rclone Authentifizierung UI (Fail Fast & KISS)"""
+        tab = self.tabview.tab(translate("settings.tab_cloud"))
+        self.cloud_adapter = RcloneCloudAdapter()
+
+        ctk.CTkLabel(tab, text=translate("settings.cloud_status"), font=("Helvetica", 16, "bold")).pack(pady=(20, 5))
+
+        self.lbl_cloud_status = ctk.CTkLabel(tab, text="", font=("Helvetica", 14))
+        self.lbl_cloud_status.pack(pady=(0, 20))
+
+        self.btn_auth = ctk.CTkButton(tab, text=translate("settings.btn_connect_cloud"),
+                                      height=45, fg_color="#8e44ad", hover_color="#9b59b6",
+                                      command=self._do_auth)
+        self.btn_auth.pack(pady=10)
+
+        self._update_cloud_status()
+
+    def _update_cloud_status(self):
+        if self.cloud_adapter.is_authenticated():
+            self.lbl_cloud_status.configure(text=translate("settings.cloud_connected"), text_color="#1DB954")
+            self.btn_auth.configure(state="disabled")
+        else:
+            self.lbl_cloud_status.configure(text=translate("settings.cloud_disconnected"), text_color="#c0392b")
+            self.btn_auth.configure(state="normal", text=translate("settings.btn_connect_cloud"))
+
+    def _do_auth(self):
+        self.btn_auth.configure(state="disabled", text=translate("settings.auth_waiting"))
+
+        def auth_task():
+            try:
+                self.cloud_adapter.authenticate()
+                self.after(0, self._update_cloud_status)
+                EventBus.emit(SysEvents.CLOUD_AUTH_SUCCESS)
+            except Exception as e:
+                self.after(0, self._update_cloud_status)
+                EventBus.emit(SysEvents.CLOUD_AUTH_FAILED, {"error": str(e)})
+
+        threading.Thread(target=auth_task, daemon=True).start()
 
     def _browse_fl_studio(self):
         initial = os.path.dirname(self._temp_fl_path) if os.path.exists(self._temp_fl_path) else "C:\\"

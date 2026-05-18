@@ -73,8 +73,8 @@ class InviteModal(ctk.CTkToplevel):
             "type": "lobby_invite",
             "sender_name": my_name,
             "sender_identity": my_identity,
-            "room_code": self.game_state.room_code,
-            "workspace_id": self.game_state.workspace_id
+            "room_code": self.game_state.room_code
+            # WICHTIG: "workspace_id" wurde hier gelöscht, da es diese Variable nicht mehr gibt!
         })
 
         topic = f"beatrace/social/{friend_pub_id}/inbox"

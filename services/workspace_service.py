@@ -3,62 +3,38 @@
 # ================================================
 import logging
 import os
-import re
-from utils.file_utils import load_workspaces, save_workspaces, read_workspace_id
+import shutil
+from config import settings
 from services.base_service import BaseService
+
 
 class WorkspaceService(BaseService):
     def __init__(self):
         super().__init__()
-        self._data = load_workspaces()
-        if "known_folders" not in self._data:
-            self._data["known_folders"] = []
+        # SRP & KISS: Wir verwalten keine lokalen Drive-Ordner mehr.
+        # Alles passiert in diesem versteckten Sandbox-Ordner.
+        self.workspaces_dir = os.path.join(settings.APPDATA_DIR, "Workspaces")
+        os.makedirs(self.workspaces_dir, exist_ok=True)
         self.register_listeners()
 
-    def _save(self):
-        save_workspaces(self._data)
+    def setup_match_workspace(self, game_state):
+        """
+        Überschreibt die Pfade im GameState mit dem lokalen Sandbox-Ordner.
+        DRY: Wird von Host und Client beim Starten des Matches aufgerufen.
+        """
+        game_state.local_drive_folder = self.workspaces_dir
+        game_state.match_folder_name = f"Match_{game_state.room_code}"
 
-    def cycle_match_folder(self, base_folder):
-        if not base_folder or not os.path.exists(base_folder):
-            return ""
-        workspace_file = os.path.join(base_folder, ".beatrace_workspace")
-        if os.path.exists(workspace_file):
+        # Stelle sicher, dass der Ordner physisch existiert
+        os.makedirs(game_state.local_match_dir, exist_ok=True)
+        logging.info(f"[WorkspaceService] Sandbox bereit: {game_state.local_match_dir}")
+
+    def cleanup_match_workspace(self, room_code):
+        """Fail Fast / Cleanup: Löscht den Sandbox-Ordner nach dem Match, um Müll zu vermeiden."""
+        path = os.path.join(self.workspaces_dir, f"Match_{room_code}")
+        if os.path.exists(path):
             try:
-                os.remove(workspace_file)
+                shutil.rmtree(path)
+                logging.info(f"[WorkspaceService] Sandbox gelöscht: {path}")
             except Exception as e:
-                logging.warning(f"[WorkspaceService] Konnte alte Signatur nicht löschen: {e}")
-
-        max_num = 0
-        try:
-            for d in os.listdir(base_folder):
-                if os.path.isdir(os.path.join(base_folder, d)):
-                    match = re.match(r"Beatrace_Match_(\d+)", d)
-                    if match:
-                        max_num = max(max_num, int(match.group(1)))
-        except Exception as e:
-            logging.error(f"[WorkspaceService] Fehler beim Suchen der Match-Ordner: {e}")
-
-        new_folder_name = f"Beatrace_Match_{max_num + 1}"
-        os.makedirs(os.path.join(base_folder, new_folder_name), exist_ok=True)
-        return new_folder_name
-
-    def add_known_folder(self, base_folder_path):
-        if not base_folder_path or not os.path.exists(base_folder_path):
-            return False
-        norm_path = os.path.normpath(base_folder_path)
-        if norm_path not in self._data["known_folders"]:
-            self._data["known_folders"].append(norm_path)
-            self._save()
-            logging.info(f"[WorkspaceService] Neuer lokaler Ordner registriert: {norm_path}")
-        return True
-
-    def get_auto_join_path(self, workspace_id):
-        if not workspace_id:
-            return None
-        for folder in self._data["known_folders"]:
-            if os.path.isdir(folder):
-                current_id = read_workspace_id(folder)
-                if current_id == workspace_id:
-                    logging.info(f"[WorkspaceService] Live-Handshake erfolgreich für Auto-Join: {folder}")
-                    return folder
-        return None
+                logging.error(f"[WorkspaceService] Sandbox konnte nicht gelöscht werden: {e}")

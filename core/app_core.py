@@ -5,7 +5,6 @@ import logging
 from core.game_state import GameState
 from network.mqtt_client import NetworkManager
 from services.system_monitor_service import SystemMonitorService
-from services.handshake_service import HandshakeService
 from services.discord_service import DiscordService
 from services.presence_service import PresenceService
 from services.updater_service import UpdaterService
@@ -41,7 +40,6 @@ class AppCore:
         # 3. Hintergrund-Services booten
         self.sound_service = SoundService()
         self.system_monitor = SystemMonitorService()
-        self.handshake_service = HandshakeService(self.workspace_service)
         self.discord_service = DiscordService()
         self.presence_service = PresenceService(self.identity_service, self.friend_service)
         self.updater_service = UpdaterService()
@@ -63,11 +61,9 @@ class AppCore:
         self.lobby_service.stop()
 
         self.discord_service.cleanup()
-        self.handshake_service.cleanup()
         self.updater_service.cleanup()
         self.sound_service.cleanup()
 
-        # Säubere auch unsere neuen Stateful Services
         self.identity_service.cleanup()
         self.friend_service.cleanup()
         self.workspace_service.cleanup()

@@ -3,6 +3,7 @@
 # ================================================
 import logging
 from core.event_bus import EventBus
+from core.events import NetEvents, UIEvents
 from services.base_service import BaseService
 
 
@@ -13,19 +14,15 @@ class LobbyService(BaseService):
         self.network = network
         self.workspace_service = workspace_service
         self._is_running = False
-        self._last_verified_ws = None
 
         self._listeners = {
-            "NET_CONNECTED": self._on_connected,
-            "NET_CLIENT_JOIN": self._on_client_join,
-            "NET_NAME_TAKEN": self._on_name_taken,
-            "NET_SYNC_STATE": self._on_sync_state,
-            "NET_CLIENT_LEAVE": self._on_client_leave,
-            "NET_FOLDER_VERIFIED": self._on_folder_verified,
-            "NET_LOBBY_CLOSED": self._on_lobby_closed,
-            "SYS_WORKSPACE_READY": self._on_workspace_ready,
-            "SYS_HANDSHAKE_SUCCESS": self._on_local_handshake_success,
-            "SYS_HANDSHAKE_TIMEOUT": self._on_handshake_timeout
+            NetEvents.CONNECTED: self._on_connected,
+            NetEvents.CLIENT_JOIN: self._on_client_join,
+            NetEvents.NAME_TAKEN: self._on_name_taken,
+            NetEvents.SYNC_STATE: self._on_sync_state,
+            NetEvents.CLIENT_LEAVE: self._on_client_leave,
+            NetEvents.FOLDER_VERIFIED: self._on_folder_verified,
+            NetEvents.LOBBY_CLOSED: self._on_lobby_closed
         }
 
     def start(self):
@@ -71,13 +68,13 @@ class LobbyService(BaseService):
             self.game_state.set_bonus_text(sender, "")
 
             self.network.send_signal("SYNC_STATE", data=self.game_state.export_sync_data())
-            EventBus.emit("UI_LOBBY_REFRESH")
+            EventBus.emit(UIEvents.LOBBY_REFRESH)
 
     def _on_name_taken(self, payload):
         data = payload.get("data", {})
         if not self.game_state.is_host and data.get("target") == self.game_state.my_name:
             self._handle_cleanup()
-            EventBus.emit("UI_LOBBY_ERROR_NAME_TAKEN")
+            EventBus.emit(UIEvents.LOBBY_ERROR_NAME_TAKEN)
 
     def _on_sync_state(self, payload):
         data = payload.get("data", {})
@@ -85,19 +82,13 @@ class LobbyService(BaseService):
             self.game_state.load_sync_data(data)
             self.game_state.ready_players = set(self.game_state.players)
 
-            EventBus.emit("UI_LOBBY_SYNCED")
-            EventBus.emit("UI_LOBBY_REFRESH")
+            # KISS & DRY: Da Rclone den Sync übernimmt und wir Sandboxing nutzen,
+            # gibt es keine lokalen Handshakes mehr! Der Client ist sofort verifiziert.
+            if self.game_state.my_name not in self.game_state.verified_players:
+                self.network.send_signal("FOLDER_VERIFIED")
 
-            workspace_id = self.game_state.workspace_id
-            is_verified_by_host = self.game_state.my_name in self.game_state.verified_players
-
-            if workspace_id and not is_verified_by_host:
-                if self._last_verified_ws != workspace_id:
-                    self._last_verified_ws = workspace_id
-                    EventBus.emit("CMD_VERIFY_WORKSPACE", data={
-                        "base_folder": self.game_state.local_drive_folder,
-                        "workspace_id": workspace_id
-                    })
+            EventBus.emit(UIEvents.LOBBY_SYNCED)
+            EventBus.emit(UIEvents.LOBBY_REFRESH)
 
     def _on_client_leave(self, payload):
         sender = payload.get("sender")
@@ -108,7 +99,7 @@ class LobbyService(BaseService):
             if sender in self.game_state.verified_players: self.game_state.verified_players.remove(sender)
 
             self.network.send_signal("SYNC_STATE", data=self.game_state.export_sync_data())
-            EventBus.emit("UI_LOBBY_REFRESH")
+            EventBus.emit(UIEvents.LOBBY_REFRESH)
 
     def _on_folder_verified(self, payload):
         sender = payload.get("sender")
@@ -116,35 +107,17 @@ class LobbyService(BaseService):
             if sender not in self.game_state.verified_players:
                 self.game_state.verified_players.add(sender)
                 self.network.send_signal("SYNC_STATE", data=self.game_state.export_sync_data())
-                EventBus.emit("UI_LOBBY_REFRESH")
+                EventBus.emit(UIEvents.LOBBY_REFRESH)
 
     def _on_lobby_closed(self, data=None):
         if not self.game_state.is_host:
             self._handle_cleanup()
-            EventBus.emit("UI_LOBBY_HOST_CLOSED")
-
-    def _on_workspace_ready(self, data):
-        if self.game_state.is_host:
-            self.game_state.workspace_id = data.get("workspace_id", "")
-            self.game_state.verified_players.add(self.game_state.my_name)
-
-            if self.network.is_connected:
-                self.network.send_signal("SYNC_STATE", data=self.game_state.export_sync_data())
-            EventBus.emit("UI_LOBBY_REFRESH")
-
-    def _on_local_handshake_success(self, data=None):
-        if not self.game_state.is_host:
-            self.game_state.verified_players.add(self.game_state.my_name)
-            self.network.send_signal("FOLDER_VERIFIED")
-            EventBus.emit("UI_LOBBY_REFRESH")
-
-    def _on_handshake_timeout(self, data=None):
-        if not self.game_state.is_host:
-            self.network.send_signal("CLIENT_LEAVE")
-            self._handle_cleanup()
-            EventBus.emit("UI_LOBBY_ERROR_HANDSHAKE")
+            EventBus.emit(UIEvents.LOBBY_HOST_CLOSED)
 
     def _handle_cleanup(self):
+        if self.workspace_service and self.game_state.room_code:
+            self.workspace_service.cleanup_match_workspace(self.game_state.room_code)
+
         self._last_verified_ws = None
         self.network.disconnect()
         self.game_state.reset_match_data()

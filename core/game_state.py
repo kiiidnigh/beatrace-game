@@ -21,7 +21,8 @@ class GameState:
         self.project_filename = "project.zip"
         self.selected_template_path = ""
 
-        self.workspace_id = ""
+        # NEU: Der exakte Pfad in der Cloud (wird vom Host an alle verteilt)
+        self.cloud_remote_path = ""
 
         # Identity aus dem Service injiziert!
         self.my_identity = identity_service.get_or_create_id()
@@ -55,7 +56,7 @@ class GameState:
         self.match_stats.clear()
         self.active_player = None
         self.room_code = ""
-        self.workspace_id = ""
+        self.cloud_remote_path = ""
 
     def prepare_next_match(self):
         """
@@ -63,18 +64,11 @@ class GameState:
         Netzwerk, Spielerliste und Host-Rechte bleiben erhalten.
         """
         self.active_players = list(self.players)
-
-        # FIX 1 & 2: Alle Spieler in der Lobby sind direkt wieder 'ready'
         self.ready_players = set(self.players)
         self.eliminated_players.clear()
 
-        # Der Host hat seinen Ordner ja schon, alle anderen müssen neu verifizieren
-        self.verified_players = {self.my_name} if self.is_host else set()
-
-        # FIX 3: Clients müssen ihre Workspace ID vergessen, um die Syncing-Logik
-        # beim Empfang des nächsten SYNC_STATE vom Host neu zu triggern.
-        if not self.is_host:
-            self.workspace_id = ""
+        # Mit Rclone ist jeder sofort wieder verifiziert (Sandboxing regelt)
+        self.verified_players = set(self.players)
 
         self._times.clear()
         self._bonus_texts.clear()
@@ -122,10 +116,11 @@ class GameState:
         self.start_time_minutes = data.get("start_time_minutes", 15)
         self.penalty_seconds = data.get("penalty_seconds", 0)
         self.distribute_time = data.get("distribute_time", False)
-        self.match_folder_name = data.get("match_folder_name", "")
         self.project_filename = data.get("project_filename", "project.zip")
-        self.workspace_id = data.get("workspace_id", "")
         self.verified_players = set(data.get("verified_players", []))
+
+        # NEU: Cloud Pfad übernehmen
+        self.cloud_remote_path = data.get("cloud_remote_path", "")
 
         for player in self.players:
             if player not in self._times:
@@ -133,14 +128,14 @@ class GameState:
                 self.set_bonus_text(player, "")
 
     def export_sync_data(self):
+        # NEU: Der Payload ist nun Cloud-Ready (lokale Folder-IDs sind überflüssig)
         return {
             "players": self.players,
             "start_time_minutes": self.start_time_minutes,
             "penalty_seconds": self.penalty_seconds,
             "distribute_time": self.distribute_time,
-            "match_folder_name": self.match_folder_name,
             "project_filename": self.project_filename,
-            "workspace_id": self.workspace_id,
+            "cloud_remote_path": self.cloud_remote_path,
             "verified_players": list(self.verified_players)
         }
 

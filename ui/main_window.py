@@ -86,17 +86,20 @@ class MainWindow(ctk.CTk):
         else:
             from ui.components.bug_report_modal import BugReportModal
             self._bug_modal = BugReportModal(self)
+
     # ------------------------------------------------------------------
 
     def _handle_return_to_lobby(self):
+        if self.game_state.room_code:
+            self.app_core.workspace_service.cleanup_match_workspace(self.game_state.room_code)
+
         self.game_state.prepare_next_match()
+        self.app_core.workspace_service.setup_match_workspace(self.game_state)
+
         self.show_lobby()
 
         if self.game_state.is_host:
             self.network.send_signal("RETURN_TO_LOBBY")
-            new_folder = self.app_core.workspace_service.cycle_match_folder(self.game_state.local_drive_folder)
-            self.game_state.match_folder_name = new_folder
-            EventBus.emit("CMD_PREPARE_WORKSPACE", {"base_folder": self.game_state.local_drive_folder})
 
     def _on_closing(self):
         if self.network.is_connected:

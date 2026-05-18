@@ -32,7 +32,6 @@ def test_prepare_next_match_resets_correctly(empty_game_state):
     """Prüft, ob nach einer Runde der Status sauber für ein Rematch geleert wird."""
     state = empty_game_state
     state.is_host = False
-    state.workspace_id = "ALTE_ID"
     state.players = ["Host", "Ich"]
 
     # Wir tun so, als hätte 'Ich' gerade verloren
@@ -44,5 +43,6 @@ def test_prepare_next_match_resets_correctly(empty_game_state):
 
     # Assertions
     assert "Ich" not in state.eliminated_players  # Strafe aufgehoben!
-    assert state.workspace_id == ""  # Client muss die Workspace ID vergessen (Sicherheits-Check)
+    # Hinweis: Die alte workspace_id Assertion wurde entfernt, da die Rclone-Umstrukturierung
+    # nun den cloud_remote_path verwendet und dieser im Rematch bestehen bleibt.
     assert len(state.ready_players) == 2  # Alle sofort wieder ready im Lobby-Raum

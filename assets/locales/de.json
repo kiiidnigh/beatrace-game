@@ -35,8 +35,7 @@
         "invite_friends_title": "Freunde einladen",
         "btn_send_invite": "Einladen",
         "invite_sent": "Gesendet!",
-        "invite_auto_join": "Du hast den Cloud-Ordner für dieses Projekt bereits verknüpft.\nKlicke auf Beitreten, um direkt in die Lobby zu springen!",
-        "invite_manual_join": "Das ist ein neues Projekt für dich.\nBitte klicke auf Beitreten, um deinen lokalen Speicherort für diesen Cloud-Ordner auszuwählen.",
+        "invite_auto_join": "Klicke auf Beitreten, um direkt in die Lobby zu springen!",
         "invite_name_title": "Name fehlt",
         "invite_name_prompt": "Bitte gib deinen Spielernamen ein:"
     },
@@ -47,29 +46,17 @@
         "time_label": "Startzeit pro Spieler (Minuten):",
         "penalty_label": "Strafzeit für Spielpausierung (Sekunden):",
         "distribute_label": "Restzeit aufteilen, wenn Spieler aufgibt/fertig ist",
-        "folder_mode_label": "Match-Ordner Modus:",
-        "mode_auto": "Automatisch",
-        "mode_manual": "Manuell Wählen",
+        "cloud_folder_label": "Cloud-Zielordner (Name):",
+        "cloud_not_connected": "Cloud nicht verbunden! Bitte in den Einstellungen anmelden.",
         "btn_create": "RAUM ERSTELLEN",
-        "no_folder_warning": "Kein vorheriger Ordner gefunden.\nBitte wähle einmalig 'Manuell Wählen'.",
-        "loading": "Wird geladen...",
-        "base_folder_prefix": "Basis: .../{0}",
-        "match_folder_prefix": "Match-Ordner: {0}",
-        "auto_folder_suffix": "\n(Ordner wird beim Start automatisch erstellt)",
-        "dialog_choose_folder": "Wähle deinen Cloud Basis-Ordner (z.B. Google Drive/BeatRace)",
-        "err_no_folder": "Bitte wähle oder erstelle einen Match-Ordner!",
-        "err_times_numeric": "Zeiten müssen Zahlen sein!"
+        "err_times_numeric": "Zeiten müssen Zahlen sein!",
+        "err_no_name": "Bitte gib einen Ordnernamen ein!"
     },
     "join": {
         "title": "Spiel beitreten",
         "code_label": "Game Code (vom Host):",
-        "folder_label": "Google Drive Basis-Ordner wählen:",
-        "folder_sub_label": "(Der Ordner, in dem die Projekte synchronisiert werden)",
-        "btn_choose_folder": "Ordner auswählen",
-        "not_selected": "Nicht ausgewählt",
         "btn_join": "BEITRETEN",
-        "err_invalid_code": "Ungültiger Code!",
-        "err_no_folder": "Bitte Drive Ordner auswählen!"
+        "err_invalid_code": "Ungültiger Code!"
     },
     "lobby": {
         "code_label": "LOBBY CODE",
@@ -116,6 +103,7 @@
         "tab_general": "Allgemein",
         "tab_sound": "Sound",
         "tab_daws": "DAWs",
+        "tab_cloud": "Cloud Sync",
         "language_label": "Language / Sprache:",
         "ux_mode_label": "UX Modus (während deines Zuges)",
         "ux_standard_desc": "Das normale Fenster bleibt offen.",
@@ -131,7 +119,18 @@
         "snd_eliminated": "Spieler Ausgeschieden",
         "snd_match_finish": "Match Ende",
         "btn_browse": "Durchsuchen...",
-        "status_missing": "Kein Pfad angegeben"
+        "status_missing": "Kein Pfad angegeben",
+        "cloud_status": "Cloud Status:",
+        "cloud_connected": "✅ Mit Google Drive verbunden",
+        "cloud_disconnected": "❌ Nicht verbunden",
+        "btn_connect_cloud": "Mit Google Drive verbinden",
+        "auth_waiting": "Warte auf Browser..."
+    },
+    "errors": {
+        "sync_error_title": "Cloud Sync Fehler",
+        "auth_success_title": "Cloud Verbunden",
+        "auth_success_msg": "Erfolgreich mit Google Drive verbunden!\nDu kannst nun Spiele hosten und beitreten.",
+        "auth_failed_title": "Authentifizierung Fehlgeschlagen"
     },
     "status": {
         "opening_daw": "Öffne DAW...",

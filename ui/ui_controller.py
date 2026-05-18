@@ -30,16 +30,21 @@ class UIController:
         self._setup_listeners()
 
     def _setup_listeners(self):
+        # Native Warnungen und Blocker
         EventBus.subscribe_ui(self.master, SysEvents.FL_WARNING_SHOW, self.show_fl_warning_overlay)
         EventBus.subscribe_ui(self.master, SysEvents.FL_WARNING_HIDE, self.hide_fl_warning_overlay)
         EventBus.subscribe_ui(self.master, SysEvents.FL_MANUAL_START_BLOCKED, self.show_manual_start_warning)
-
         EventBus.subscribe_ui(self.master, SysEvents.FILE_CORRUPTED, self._show_file_corrupt_warning)
         EventBus.subscribe_ui(self.master, SysEvents.DAW_NOT_FOUND, self._show_daw_missing_popup)
 
+        # NEU: Cloud Fail-Fast Popups
+        EventBus.subscribe_ui(self.master, SysEvents.SYNC_ERROR, self._show_sync_error)
+        EventBus.subscribe_ui(self.master, SysEvents.CLOUD_AUTH_SUCCESS, self._show_auth_success)
+        EventBus.subscribe_ui(self.master, SysEvents.CLOUD_AUTH_FAILED, self._show_auth_failed)
+
+        # Social & Updater
         EventBus.subscribe_ui(self.master, SocialEvents.INVITE_RECEIVED, self._show_invite_popup)
         EventBus.subscribe_ui(self.master, SocialEvents.FRIEND_REQUEST_RECEIVED, self._show_friend_request_popup)
-
         EventBus.subscribe_ui(self.master, UpdaterEvents.AVAILABLE, self._show_update_popup)
         EventBus.subscribe_ui(self.master, UIEvents.LANGUAGE_CHANGED, self._on_language_changed)
 
@@ -49,6 +54,40 @@ class UIController:
             self.lbl_warn_main.configure(text=translate("fl_warning.main_text"))
             self.lbl_warn_sub.configure(text=translate("fl_warning.sub_text"))
 
+    # --- CLOUD FEEDBACK ---
+    def _show_sync_error(self, data):
+        error_msg = data.get("error", "Unknown Rclone Error")
+        CustomPopup(
+            master=self.master,
+            title=translate("errors.sync_error_title"),
+            message=f"{error_msg}\n\nBitte überprüfe deine Internetverbindung und deinen Cloud-Speicherplatz.",
+            icon="❌",
+            btn_color="#c0392b",
+            sound_type="error"
+        )
+
+    def _show_auth_success(self, data=None):
+        CustomPopup(
+            master=self.master,
+            title=translate("errors.auth_success_title"),
+            message=translate("errors.auth_success_msg"),
+            icon="✅",
+            btn_color="#1DB954",
+            sound_type="info"
+        )
+
+    def _show_auth_failed(self, data):
+        error_msg = data.get("error", "Timeout")
+        CustomPopup(
+            master=self.master,
+            title=translate("errors.auth_failed_title"),
+            message=f"Fehler: {error_msg}",
+            icon="⚠️",
+            btn_color="#e67e22",
+            sound_type="warning"
+        )
+
+    # --- BESTEHENDE POPUPS ---
     def _show_daw_missing_popup(self, data):
         daw_name = data.get("daw_name", "DAW")
         msg = f"{daw_name} konnte nicht gefunden werden.\nBitte wähle die ausführbare Datei (.exe) manuell in den Einstellungen aus."
@@ -69,7 +108,6 @@ class UIController:
     def _show_update_popup(self, data):
         latest_version = data.get("version", "")
         download_url = data.get("url", "")
-
         msg = translate("updater.available_msg").replace("{version}", latest_version)
 
         def on_confirm():
@@ -109,7 +147,6 @@ class UIController:
 
         def accept():
             self.app_core.friend_service.add_friend(sender_name, sender_identity)
-
             my_identity = self.app_core.identity_service.get_or_create_id()
             my_name = self.app_core.identity_service.get_display_name()
 
@@ -144,19 +181,11 @@ class UIController:
 
         sender = data.get("sender_name", translate("common.unknown"))
         code = data.get("room_code", "")
-        invite_workspace_id = data.get("workspace_id", "")
-
-        auto_join_path = self.app_core.workspace_service.get_auto_join_path(invite_workspace_id)
 
         def _proceed_to_join():
             self.game_state.room_code = code
             self.game_state.is_host = False
-
-            if auto_join_path:
-                self.game_state.local_drive_folder = auto_join_path
-                self.master.show_lobby()
-            else:
-                self.master.show_join()
+            self.master.show_lobby()
 
         def accept():
             if hasattr(self.master, 'current_view') and type(self.master.current_view).__name__ == "HomeView":
@@ -179,16 +208,16 @@ class UIController:
 
             _proceed_to_join()
 
+        # KISS: Join ist jetzt immer "Auto Join", weil es keine lokalen Ordner mehr gibt!
         base_msg = translate("social.invite_popup_msg").format(player=sender, code=code)
-        status_text = translate("social.invite_auto_join") if auto_join_path else translate("social.invite_manual_join")
-        btn_color = "#1DB954" if auto_join_path else "#e67e22"
+        status_text = translate("social.invite_auto_join")
 
         CustomPopup(
             master=self.master,
             title=translate("social.invite_popup_title"),
             message=f"{base_msg}\n\n{status_text}",
             icon="✉️",
-            btn_color=btn_color,
+            btn_color="#1DB954",
             sound_type="info",
             show_cancel=True,
             confirm_text=translate("social.btn_accept"),

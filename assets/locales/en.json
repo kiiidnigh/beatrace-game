@@ -35,8 +35,7 @@
         "invite_friends_title": "Invite Friends",
         "btn_send_invite": "Invite",
         "invite_sent": "Sent!",
-        "invite_auto_join": "You have already linked the Cloud folder for this project.\nClick Join to jump straight into the lobby!",
-        "invite_manual_join": "This is a new project for you.\nPlease click Join to select your local save location for this Cloud folder.",
+        "invite_auto_join": "Click Join to jump straight into the lobby!",
         "invite_name_title": "Name Missing",
         "invite_name_prompt": "Please enter your player name:"
     },
@@ -47,29 +46,17 @@
         "time_label": "Starting time per player (Minutes):",
         "penalty_label": "Penalty time for pausing (Seconds):",
         "distribute_label": "Distribute remaining time when a player gives up/finishes",
-        "folder_mode_label": "Match Folder Mode:",
-        "mode_auto": "Automatic",
-        "mode_manual": "Choose Manually",
+        "cloud_folder_label": "Cloud Target Folder (Name):",
+        "cloud_not_connected": "Cloud not connected! Please sign in via Settings.",
         "btn_create": "CREATE ROOM",
-        "no_folder_warning": "No previous folder found.\nPlease select 'Choose Manually' once.",
-        "loading": "Loading...",
-        "base_folder_prefix": "Base: .../{0}",
-        "match_folder_prefix": "Match Folder: {0}",
-        "auto_folder_suffix": "\n(Folder will be created automatically at start)",
-        "dialog_choose_folder": "Choose your Cloud Base Folder (e.g. Google Drive/BeatRace)",
-        "err_no_folder": "Please select or create a Match Folder!",
-        "err_times_numeric": "Times must be numbers!"
+        "err_times_numeric": "Times must be numbers!",
+        "err_no_name": "Please enter a folder name!"
     },
     "join": {
         "title": "Join Game",
         "code_label": "Game Code (from Host):",
-        "folder_label": "Select Google Drive Base Folder:",
-        "folder_sub_label": "(The folder where the projects are synchronized)",
-        "btn_choose_folder": "Select Folder",
-        "not_selected": "Not selected",
         "btn_join": "JOIN",
-        "err_invalid_code": "Invalid Code!",
-        "err_no_folder": "Please select a Drive folder!"
+        "err_invalid_code": "Invalid Code!"
     },
     "lobby": {
         "code_label": "LOBBY CODE",
@@ -116,6 +103,7 @@
         "tab_general": "General",
         "tab_sound": "Sound",
         "tab_daws": "DAWs",
+        "tab_cloud": "Cloud Sync",
         "language_label": "Language / Sprache:",
         "ux_mode_label": "UX Mode (during your turn)",
         "ux_standard_desc": "The normal window remains open.",
@@ -131,7 +119,18 @@
         "snd_eliminated": "Player Eliminated",
         "snd_match_finish": "Match Finish",
         "btn_browse": "Browse...",
-        "status_missing": "No path specified"
+        "status_missing": "No path specified",
+        "cloud_status": "Cloud Status:",
+        "cloud_connected": "✅ Connected to Google Drive",
+        "cloud_disconnected": "❌ Not connected",
+        "btn_connect_cloud": "Connect with Google Drive",
+        "auth_waiting": "Waiting for Browser..."
+    },
+    "errors": {
+        "sync_error_title": "Cloud Sync Error",
+        "auth_success_title": "Cloud Connected",
+        "auth_success_msg": "Successfully connected to Google Drive!\nYou can now host and join matches.",
+        "auth_failed_title": "Authentication Failed"
     },
     "status": {
         "opening_daw": "Opening DAW...",
